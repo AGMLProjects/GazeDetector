@@ -1,5 +1,7 @@
-from keras.layers import BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Lambda
+from keras.layers import Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Lambda, Input, Dense, Flatten
 from keras import backend as K
+from keras.models import model
+from keras.regularizer import l2
 from tensorflow.python.keras.engine.base_layer import Layer
 
 import numpy as np
@@ -139,3 +141,39 @@ def attention_block(input, input_channels = None, output_channels = None, encode
 
     return output
 
+def GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.01):
+
+    # Define the regularization factor
+    regularizer = l2(regularization)
+
+    # Perform preliminar normalization, reshaping and pooling before feeding the attention network
+    input_ = Input(shape = shape)
+    x = Conv2D(n_channels, (7, 7), strides = (2, 2), padding = "same")(input_)
+    x = BatchNormalization()(x)
+    x = Activation("relu")(x)
+    x = MaxPooling2D(pool_size = (3, 3), strides = (2, 2), padding = "same")(x)
+
+    # Feed the GRA_Net
+    x = residual_block(x, output_channels=n_channels * 4)  # 56x56
+    x = attention_block(x, encoder_depth=3)  # bottleneck 7x7
+
+    x = residual_block(x, output_channels=n_channels * 8, stride=2)  # 28x28
+    x = attention_block(x, encoder_depth=2)  # bottleneck 7x7
+
+    x = residual_block(x, output_channels=n_channels * 16, stride=2)  # 14x14
+    x = attention_block(x, encoder_depth=1)  # bottleneck 7x7
+
+    x = residual_block(x, output_channels=n_channels * 32, stride=2)  # 7x7
+    x = residual_block(x, output_channels=n_channels * 32)
+    x = residual_block(x, output_channels=n_channels * 32)
+
+    # Final pooling and softmax steps
+    pool_size = (x.get_shape()[1].value, x.get_shape()[2].value)
+    x = AveragePooling2D(pool_size=pool_size, strides=(1, 1))(x)
+    x = Flatten()(x)
+    if dropout:
+        x = Dropout(dropout)(x)
+    output = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(x)
+
+    model = Model(input_, output)
+    return model
