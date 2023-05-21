@@ -1,10 +1,8 @@
-from keras.layers import Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Lambda, Input, Dense, Flatten
-from keras import backend as K
-from keras.models import model
-from keras.regularizer import l2
-from tensorflow.python.keras.engine.base_layer import Layer
+from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Input, Dense, Flatten
+from keras.models import Model
+from keras.regularizers import l2
 
-import numpy as np
+import tensorflow as tf
 
 # Define the GatedLayer class which will be define both the residual and the gated blocks
 class GatedLayer(Layer):
@@ -168,7 +166,7 @@ def GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout
     x = residual_block(x, output_channels=n_channels * 32)
 
     # Final pooling and softmax steps
-    pool_size = (x.get_shape()[1].value, x.get_shape()[2].value)
+    pool_size = (x.get_shape()[1], x.get_shape()[2])
     x = AveragePooling2D(pool_size=pool_size, strides=(1, 1))(x)
     x = Flatten()(x)
     if dropout:
@@ -177,3 +175,70 @@ def GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout
 
     model = Model(input_, output)
     return model
+
+def train_model(image_size: tuple, dataset_path: str, batch_size: int = 32, epochs: int = 10):
+    if type(image_size) != tuple or type(dataset_path) != str or type(batch_size) != int or type(epochs) != int:
+        raise TypeError("Wrong type of input parameters")
+
+    # Define the distribution strategy
+    strategy = tf.distribute.MirroredStrategy()
+
+    # Define the GPU device
+    with strategy.scope():
+        # Load the dataset
+        train = tf.keras.preprocessing.image_dataset_from_directory(
+            dataset_path,
+            validation_split = 0.2,
+            subset = "training",
+            seed = 123,
+            image_size = image_size,
+            batch_size = batch_size
+        )
+
+        validation = tf.keras.preprocessing.image_dataset_from_directory(
+            dataset_path,
+            validation_split = 0.2,
+            subset = "validation",
+            seed = 123,
+            image_size = image_size,
+            batch_size = batch_size
+        )
+
+        # Print the dataset classes
+        class_names = train.class_names
+        print(class_names)
+
+        # Define the model
+        model = GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.01)
+        model.summary()
+
+    # Compile the model
+    model.compile(
+        optimizer = "adam",
+        loss = "sparse_categorical_crossentropy",
+        metrics = ["accuracy"]
+    )
+
+    # Train the model
+    model.fit(
+        train,
+        validation_data = validation,
+        epochs = epochs
+    )
+
+    # Print the accuracy
+    print("Accuracy: {}".format(model.evaluate(validation)[1]))
+
+    # Save the model
+    model.save("GenderNetwork.h5")
+
+if __name__ == "__main__":
+
+    # Define the constants
+    IMAGE_SIZE = (224, 224)
+    DATASET_PATH = "./Gender/"
+    BATCH_SIZE = 32
+    EPOCHS = 10
+
+
+
