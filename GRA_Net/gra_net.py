@@ -2,7 +2,11 @@ from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, C
 from keras.models import Model
 from keras.regularizers import l2
 
+from tensorflow import keras
 import tensorflow as tf
+
+from PIL import Image
+import numpy as np
 
 # Define the GatedLayer class which will be define both the residual and the gated blocks
 class GatedLayer(Layer):
@@ -139,7 +143,7 @@ def attention_block(input, input_channels = None, output_channels = None, encode
 
     return output
 
-def GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.01):
+def GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.001):
 
     # Define the regularization factor
     regularizer = l2(regularization)
@@ -152,16 +156,16 @@ def GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout
     x = MaxPooling2D(pool_size = (3, 3), strides = (2, 2), padding = "same")(x)
 
     # Feed the GRA_Net
-    x = residual_block(x, output_channels=n_channels * 4)  # 56x56
-    x = attention_block(x, encoder_depth=3)  # bottleneck 7x7
+    x = attention_block(x, encoder_depth=3)                             # 56x56
+    x = residual_block(x, output_channels=n_channels * 4)               # Bottleneck 7x7
 
-    x = residual_block(x, output_channels=n_channels * 8, stride=2)  # 28x28
-    x = attention_block(x, encoder_depth=2)  # bottleneck 7x7
+    x = attention_block(x, encoder_depth=2)                             # 28x28
+    x = residual_block(x, output_channels=n_channels * 8, stride=2)     # Bottleneck 7x7
 
-    x = residual_block(x, output_channels=n_channels * 16, stride=2)  # 14x14
-    x = attention_block(x, encoder_depth=1)  # bottleneck 7x7
-
-    x = residual_block(x, output_channels=n_channels * 32, stride=2)  # 7x7
+    x = attention_block(x, encoder_depth=1)                             # 14x14
+    x = residual_block(x, output_channels=n_channels * 16, stride=2)    # Bottleneck 7x7
+    
+    x = residual_block(x, output_channels=n_channels * 32, stride=2)    # 7x7
     x = residual_block(x, output_channels=n_channels * 32)
     x = residual_block(x, output_channels=n_channels * 32)
 
@@ -171,7 +175,7 @@ def GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout
     x = Flatten()(x)
     if dropout:
         x = Dropout(dropout)(x)
-    output = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(x)
+    output = Dense(n_classes, kernel_regularizer=regularizer, activation='relu')(x)
 
     model = Model(input_, output)
     return model
@@ -186,19 +190,12 @@ def train_model(image_size: tuple, dataset_path: str, batch_size: int = 32, epoc
     # Define the GPU device
     with strategy.scope():
         # Load the dataset
-        train = tf.keras.preprocessing.image_dataset_from_directory(
+        train, validation = tf.keras.preprocessing.image_dataset_from_directory(
             dataset_path,
+            labels='inferred',
+            label_mode = "binary",
             validation_split = 0.2,
-            subset = "training",
-            seed = 123,
-            image_size = image_size,
-            batch_size = batch_size
-        )
-
-        validation = tf.keras.preprocessing.image_dataset_from_directory(
-            dataset_path,
-            validation_split = 0.2,
-            subset = "validation",
+            subset = "both",
             seed = 123,
             image_size = image_size,
             batch_size = batch_size
@@ -209,14 +206,18 @@ def train_model(image_size: tuple, dataset_path: str, batch_size: int = 32, epoc
         print(class_names)
 
         # Define the model
-        model = GenderNetwork(shape = (224, 224, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.01)
+        model = GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.001)
         model.summary()
+
+        optimizer = tf.keras.optimizers.Nadam()
+        loss = tf.keras.losses.BinaryCrossentropy(from_logits = False)
+        metrics = [tf.keras.metrics.BinaryAccuracy()]
 
     # Compile the model
     model.compile(
-        optimizer = "adam",
-        loss = "sparse_categorical_crossentropy",
-        metrics = ["accuracy"]
+        optimizer = optimizer,
+        loss = loss,
+        metrics = metrics
     )
 
     # Train the model
@@ -235,10 +236,28 @@ def train_model(image_size: tuple, dataset_path: str, batch_size: int = 32, epoc
 if __name__ == "__main__":
 
     # Define the constants
-    IMAGE_SIZE = (224, 224)
+    IMAGE_SIZE = (32, 32)
     DATASET_PATH = "./Gender/"
     BATCH_SIZE = 32
     EPOCHS = 10
+    CLASS_NAME = ["female", "male"]
 
+    train_model(image_size = IMAGE_SIZE, dataset_path = DATASET_PATH)
 
+    '''
+    image = Image.open("./test.jpg")
+    print((np.array(image).astype("float32") / 255).shape)
+    image = image.resize(IMAGE_SIZE, resample=Image.LANCZOS)
+    image.save("./result.jpg")
+    image = np.array(image).astype("float32") / 255
+    image = np.expand_dims(image, axis = 0)
+    print(image.shape)
+    
+
+    model = keras.models.load_model("GenderNetwork.h5", custom_objects = {'GatedLayer': GatedLayer})
+    prediction = model.predict(image)
+    predicted_class_index = np.argmax(prediction)
+    predicted_class_name = CLASS_NAME[predicted_class_index]
+    print(predicted_class_name)
+    '''
 
