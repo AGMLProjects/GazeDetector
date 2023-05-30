@@ -7,6 +7,8 @@ import tensorflow as tf
 
 from PIL import Image
 import numpy as np
+import pandas as pd
+import os, re, pathlib
 
 # Define the GatedLayer class which will be define both the residual and the gated blocks
 class GatedLayer(Layer):
@@ -233,6 +235,41 @@ def train_model(image_size: tuple, dataset_path: str, batch_size: int = 32, epoc
     # Save the model
     model.save("GenderNetwork.h5")
 
+
+def get_label(file_path):
+
+    # Convert the path to a list of metadata
+    metadata = tf.strings.split(file_path, "_")
+    if len(metadata) < 4 or int(metadata[1]) == 0:
+        return 0
+    elif int(metadata[1]) == 1:
+        return 1
+    else:
+        return 1
+
+def decode_image(img, image_size):
+
+    # Convert the compressed string to a 3D uint8 tensor
+    img = tf.io.decode_jpeg(img, channels=3)
+
+    # Resize the image to the desired size
+    return tf.image.resize(img, image_size)
+
+def process_path(file_path):
+    label = get_label(file_path = file_path)
+
+    img = tf.io.read_file(file_path)
+    img = decode_image(img = img, image_size = [32, 32])
+    return img, label
+
+def configure_dataset(ds):
+    ds = ds.cache()
+    ds = ds.shuffle(buffer_size = 1000)
+    ds = ds.batch(32)
+    ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
+    
+    return ds
+
 if __name__ == "__main__":
 
     # Define the constants
@@ -241,23 +278,61 @@ if __name__ == "__main__":
     BATCH_SIZE = 32
     EPOCHS = 10
     CLASS_NAME = ["female", "male"]
+    DATA_REGEX = r"([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)\.jpg"
 
-    train_model(image_size = IMAGE_SIZE, dataset_path = DATASET_PATH)
+    # Define the distribution strategy
+    strategy = tf.distribute.MirroredStrategy()
 
-    '''
-    image = Image.open("./test.jpg")
-    print((np.array(image).astype("float32") / 255).shape)
-    image = image.resize(IMAGE_SIZE, resample=Image.LANCZOS)
-    image.save("./result.jpg")
-    image = np.array(image).astype("float32") / 255
-    image = np.expand_dims(image, axis = 0)
-    print(image.shape)
-    
+    # Define the GPU device
+    with strategy.scope():
+        
+        # Define the Dataset load pipeline
+        data_directory = pathlib.Path(DATASET_PATH)
+        image_count = len(list(data_directory.glob("*.jpg")))
+        print(f"Dataset size: {image_count}")
+        
+        # Load the dataset and shuffle the images
+        list_ds = tf.data.Dataset.list_files(str(data_directory/"*"), shuffle = False)
+        list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration = False)
 
-    model = keras.models.load_model("GenderNetwork.h5", custom_objects = {'GatedLayer': GatedLayer})
-    prediction = model.predict(image)
-    predicted_class_index = np.argmax(prediction)
-    predicted_class_name = CLASS_NAME[predicted_class_index]
-    print(predicted_class_name)
-    '''
+        # Define the class names
+        class_names = np.array(sorted(["male", "female"]))
 
+        # Split the dataset
+        val_size = int(image_count * 0.2)
+        train_ds = list_ds.skip(val_size)
+        val_ds = list_ds.take(val_size)
+
+        train_ds = train_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
+        val_ds = val_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
+
+        train_ds = configure_dataset(train_ds)
+        val_ds = configure_dataset(val_ds)
+
+        # Define the model
+        model = GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.001)
+        model.summary()
+
+        optimizer = tf.keras.optimizers.Nadam()
+        loss = tf.keras.losses.BinaryCrossentropy(from_logits = False)
+        metrics = [tf.keras.metrics.BinaryAccuracy()]
+
+    # Compile the model
+    model.compile(
+        optimizer = optimizer,
+        loss = loss,
+        metrics = metrics
+    )
+
+    # Train the model
+    model.fit(
+        train_ds,
+        validation_data = val_ds,
+        epochs = EPOCHS
+    )
+
+    # Print the accuracy
+    print("Accuracy: {}".format(model.evaluate(val_ds)[1]))
+
+    # Save the model
+    model.save("GenderNetwork.h5")
