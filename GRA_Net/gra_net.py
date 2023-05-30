@@ -2,13 +2,9 @@ from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, C
 from keras.models import Model
 from keras.regularizers import l2
 
-from tensorflow import keras
 import tensorflow as tf
-
-from PIL import Image
 import numpy as np
-import pandas as pd
-import os, re, pathlib
+import pathlib
 
 # Define the GatedLayer class which will be define both the residual and the gated blocks
 class GatedLayer(Layer):
@@ -177,98 +173,34 @@ def GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout =
     x = Flatten()(x)
     if dropout:
         x = Dropout(dropout)(x)
-    output = Dense(n_classes, kernel_regularizer=regularizer, activation='relu')(x)
+    output = Dense(n_classes, kernel_regularizer=regularizer, activation='sigmoid')(x)
 
     model = Model(input_, output)
     return model
 
-def train_model(image_size: tuple, dataset_path: str, batch_size: int = 32, epochs: int = 10):
-    if type(image_size) != tuple or type(dataset_path) != str or type(batch_size) != int or type(epochs) != int:
-        raise TypeError("Wrong type of input parameters")
-
-    # Define the distribution strategy
-    strategy = tf.distribute.MirroredStrategy()
-
-    # Define the GPU device
-    with strategy.scope():
-        # Load the dataset
-        train, validation = tf.keras.preprocessing.image_dataset_from_directory(
-            dataset_path,
-            labels='inferred',
-            label_mode = "binary",
-            validation_split = 0.2,
-            subset = "both",
-            seed = 123,
-            image_size = image_size,
-            batch_size = batch_size
-        )
-
-        # Print the dataset classes
-        class_names = train.class_names
-        print(class_names)
-
-        # Define the model
-        model = GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.001)
-        model.summary()
-
-        optimizer = tf.keras.optimizers.Nadam()
-        loss = tf.keras.losses.BinaryCrossentropy(from_logits = False)
-        metrics = [tf.keras.metrics.BinaryAccuracy()]
-
-    # Compile the model
-    model.compile(
-        optimizer = optimizer,
-        loss = loss,
-        metrics = metrics
-    )
-
-    # Train the model
-    model.fit(
-        train,
-        validation_data = validation,
-        epochs = epochs
-    )
-
-    # Print the accuracy
-    print("Accuracy: {}".format(model.evaluate(validation)[1]))
-
-    # Save the model
-    model.save("GenderNetwork.h5")
-
-
 def get_label(file_path):
+  metadata = tf.strings.split(file_path, "_")
+  return int(metadata[1])
 
-    # Convert the path to a list of metadata
-    metadata = tf.strings.split(file_path, "_")
-    if len(metadata) < 4 or int(metadata[1]) == 0:
-        return 0
-    elif int(metadata[1]) == 1:
-        return 1
-    else:
-        return 1
-
-def decode_image(img, image_size):
-
-    # Convert the compressed string to a 3D uint8 tensor
-    img = tf.io.decode_jpeg(img, channels=3)
-
-    # Resize the image to the desired size
-    return tf.image.resize(img, image_size)
+def decode_image(img):
+  img = tf.io.decode_jpeg(img, channels = 3)
+  return tf.image.resize(img, [32, 32])
 
 def process_path(file_path):
-    label = get_label(file_path = file_path)
+  label = get_label(file_path = file_path)
 
-    img = tf.io.read_file(file_path)
-    img = decode_image(img = img, image_size = [32, 32])
-    return img, label
+  img = tf.io.read_file(file_path)
+  img = decode_image(img = img)
+  
+  return img, label
 
 def configure_dataset(ds):
-    ds = ds.cache()
-    ds = ds.shuffle(buffer_size = 1000)
-    ds = ds.batch(32)
-    ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
-    
-    return ds
+  ds = ds.cache()
+  ds = ds.shuffle(buffer_size = 1000)
+  ds = ds.batch(32)
+  ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
+
+  return ds
 
 if __name__ == "__main__":
 
@@ -281,41 +213,37 @@ if __name__ == "__main__":
     DATA_REGEX = r"([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)\.jpg"
 
     # Define the distribution strategy
-    strategy = tf.distribute.MirroredStrategy()
+    #strategy = tf.distribute.MirroredStrategy()
 
     # Define the GPU device
-    with strategy.scope():
-        
-        # Define the Dataset load pipeline
-        data_directory = pathlib.Path(DATASET_PATH)
-        image_count = len(list(data_directory.glob("*.jpg")))
-        print(f"Dataset size: {image_count}")
-        
-        # Load the dataset and shuffle the images
-        list_ds = tf.data.Dataset.list_files(str(data_directory/"*"), shuffle = False)
-        list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration = False)
+    #with strategy.scope():
+    data_directory = pathlib.Path(DATASET_PATH)
 
-        # Define the class names
-        class_names = np.array(sorted(["male", "female"]))
+    image_count = len(list(data_directory.glob("*.jpg")))
+    print("Dataset size: " + str(image_count))
 
-        # Split the dataset
-        val_size = int(image_count * 0.2)
-        train_ds = list_ds.skip(val_size)
-        val_ds = list_ds.take(val_size)
+    list_ds = tf.data.Dataset.list_files(str(data_directory/"*"), shuffle = False)
+    list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration = False)
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+    list_ds = list_ds.with_options(options)
 
-        train_ds = train_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
-        val_ds = val_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
+    val_size = int(image_count * 0.2)
+    train_ds = list_ds.skip(val_size)
+    test_ds = list_ds.take(val_size)
 
-        train_ds = configure_dataset(train_ds)
-        val_ds = configure_dataset(val_ds)
+    train_ds = train_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
+    test_ds = test_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
 
-        # Define the model
-        model = GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.001)
-        model.summary()
+    train_ds = configure_dataset(train_ds)
+    test_ds = configure_dataset(test_ds)
 
-        optimizer = tf.keras.optimizers.Nadam()
-        loss = tf.keras.losses.BinaryCrossentropy(from_logits = False)
-        metrics = [tf.keras.metrics.BinaryAccuracy()]
+    # Define the model
+    model = GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 1, dropout = 0, regularization = 0.01)
+
+    optimizer = tf.keras.optimizers.Nadam()
+    loss = tf.keras.losses.BinaryCrossentropy(from_logits = False)
+    metrics = [tf.keras.metrics.BinaryAccuracy()]
 
     # Compile the model
     model.compile(
@@ -327,12 +255,11 @@ if __name__ == "__main__":
     # Train the model
     model.fit(
         train_ds,
-        validation_data = val_ds,
+        validation_data = test_ds,
         epochs = EPOCHS
     )
 
     # Print the accuracy
-    print("Accuracy: {}".format(model.evaluate(val_ds)[1]))
+    print("Accuracy: {}".format(model.evaluate(test_ds)[1]))
 
-    # Save the model
-    model.save("GenderNetwork.h5")
+    model.save("GraNet.h5")
