@@ -1,10 +1,12 @@
-from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Input, Dense, Flatten
+from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Input, Dense, Flatten, Lambda
 from keras.models import Model
 from keras.regularizers import l2
 
 import tensorflow as tf
 import numpy as np
 import pathlib
+
+IMAGE_SIZE = 32
 
 # Define the GatedLayer class which will be define both the residual and the gated blocks
 class GatedLayer(Layer):
@@ -133,6 +135,7 @@ def attention_block(input, input_channels = None, output_channels = None, encode
 
     # Attention
     output = GatedLayer()(output_soft_mask)
+    output = Lambda(lambda x: x + 1)(output_soft_mask)
     output = Multiply()([output, output_trunk])
 
     # Last residual block
@@ -141,7 +144,7 @@ def attention_block(input, input_channels = None, output_channels = None, encode
 
     return output
 
-def GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.001):
+def GenderNetwork(shape = (IMAGE_SIZE, IMAGE_SIZE, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.01):
 
     # Define the regularization factor
     regularizer = l2(regularization)
@@ -154,16 +157,16 @@ def GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout =
     x = MaxPooling2D(pool_size = (3, 3), strides = (2, 2), padding = "same")(x)
 
     # Feed the GRA_Net
-    x = attention_block(x, encoder_depth=3)                             # 56x56
     x = residual_block(x, output_channels=n_channels * 4)               # Bottleneck 7x7
+    x = attention_block(x, encoder_depth=3)                             # 56x56
 
-    x = attention_block(x, encoder_depth=2)                             # 28x28
     x = residual_block(x, output_channels=n_channels * 8, stride=2)     # Bottleneck 7x7
+    x = attention_block(x, encoder_depth=2)                             # 28x28
 
-    x = attention_block(x, encoder_depth=1)                             # 14x14
     x = residual_block(x, output_channels=n_channels * 16, stride=2)    # Bottleneck 7x7
+    x = attention_block(x, encoder_depth=1)                             # 14x14
     
-    x = residual_block(x, output_channels=n_channels * 32, stride=2)    # 7x7
+    x = residual_block(x, output_channels=n_channels * 32)
     x = residual_block(x, output_channels=n_channels * 32)
     x = residual_block(x, output_channels=n_channels * 32)
 
@@ -173,18 +176,18 @@ def GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 2, dropout =
     x = Flatten()(x)
     if dropout:
         x = Dropout(dropout)(x)
-    output = Dense(n_classes, kernel_regularizer=regularizer, activation='sigmoid')(x)
+    output = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(x)
 
     model = Model(input_, output)
     return model
 
 def get_label(file_path):
   metadata = tf.strings.split(file_path, "_")
-  return int(metadata[1])
+  return int(metadata[1]) + 1
 
 def decode_image(img):
   img = tf.io.decode_jpeg(img, channels = 3)
-  return tf.image.resize(img, [32, 32])
+  return tf.image.resize(img, [IMAGE_SIZE, IMAGE_SIZE])
 
 def process_path(file_path):
   label = get_label(file_path = file_path)
@@ -205,10 +208,9 @@ def configure_dataset(ds):
 if __name__ == "__main__":
 
     # Define the constants
-    IMAGE_SIZE = (32, 32)
     DATASET_PATH = "./Gender/"
     BATCH_SIZE = 32
-    EPOCHS = 10
+    EPOCHS = 35
     CLASS_NAME = ["female", "male"]
     DATA_REGEX = r"([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)\.jpg"
 
@@ -239,11 +241,11 @@ if __name__ == "__main__":
     test_ds = configure_dataset(test_ds)
 
     # Define the model
-    model = GenderNetwork(shape = (32, 32, 3), n_channels = 64, n_classes = 1, dropout = 0, regularization = 0.01)
+    model = GenderNetwork(shape = (IMAGE_SIZE, IMAGE_SIZE, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.01)
 
-    optimizer = tf.keras.optimizers.Nadam()
-    loss = tf.keras.losses.BinaryCrossentropy(from_logits = False)
-    metrics = [tf.keras.metrics.BinaryAccuracy()]
+    optimizer = tf.keras.optimizers.Nadam(learning_rate = 0.001, clipnorm = 1.0)
+    loss = tf.keras.losses.SparseCategoricalCrossentropy()
+    metrics = [tf.keras.metrics.Accuracy()]
 
     # Compile the model
     model.compile(
@@ -252,6 +254,9 @@ if __name__ == "__main__":
         metrics = metrics
     )
 
+
+    model.summary()
+    
     # Train the model
     model.fit(
         train_ds,
