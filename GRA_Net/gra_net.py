@@ -157,14 +157,14 @@ def GenderNetwork(shape = (IMAGE_SIZE, IMAGE_SIZE, 3), n_channels = 64, n_classe
     x = MaxPooling2D(pool_size = (3, 3), strides = (2, 2), padding = "same")(x)
 
     # Feed the GRA_Net
-    x = residual_block(x, output_channels=n_channels * 4)               # Bottleneck 7x7
     x = attention_block(x, encoder_depth=3)                             # 56x56
+    x = residual_block(x, output_channels=n_channels * 4)               # Bottleneck 7x7
 
-    x = residual_block(x, output_channels=n_channels * 8, stride=2)     # Bottleneck 7x7
     x = attention_block(x, encoder_depth=2)                             # 28x28
+    x = residual_block(x, output_channels=n_channels * 8, stride=2)     # Bottleneck 7x7
 
-    x = residual_block(x, output_channels=n_channels * 16, stride=2)    # Bottleneck 7x7
     x = attention_block(x, encoder_depth=1)                             # 14x14
+    x = residual_block(x, output_channels=n_channels * 16, stride=2)    # Bottleneck 7x7
     
     x = residual_block(x, output_channels=n_channels * 32)
     x = residual_block(x, output_channels=n_channels * 32)
@@ -174,6 +174,11 @@ def GenderNetwork(shape = (IMAGE_SIZE, IMAGE_SIZE, 3), n_channels = 64, n_classe
     pool_size = (x.get_shape()[1], x.get_shape()[2])
     x = AveragePooling2D(pool_size=pool_size, strides=(1, 1))(x)
     x = Flatten()(x)
+    #if dropout:
+    #    x = Dropout(dropout)(x)
+    
+    #x = Dense(n_channels * 32, kernel_regularizer = regularizer, activation = "relu")(x)
+
     if dropout:
         x = Dropout(dropout)(x)
     output = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(x)
@@ -182,12 +187,10 @@ def GenderNetwork(shape = (IMAGE_SIZE, IMAGE_SIZE, 3), n_channels = 64, n_classe
     return model
 
 def get_label(file_path):
-  metadata = tf.strings.split(file_path, "_")
-  return int(metadata[1]) + 1
+  return int(tf.strings.split(file_path, "_")[1])
 
 def decode_image(img):
-  img = tf.io.decode_jpeg(img, channels = 3)
-  return tf.image.resize(img, [IMAGE_SIZE, IMAGE_SIZE])
+  return tf.io.decode_jpeg(img, channels = 3)
 
 def process_path(file_path):
   label = get_label(file_path = file_path)
@@ -210,42 +213,61 @@ if __name__ == "__main__":
     # Define the constants
     DATASET_PATH = "./Gender/"
     BATCH_SIZE = 32
-    EPOCHS = 35
+    EPOCHS = 20
     CLASS_NAME = ["female", "male"]
     DATA_REGEX = r"([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)\.jpg"
 
-    # Define the distribution strategy
-    #strategy = tf.distribute.MirroredStrategy()
-
-    # Define the GPU device
-    #with strategy.scope():
+    # Load the dataset path
     data_directory = pathlib.Path(DATASET_PATH)
+    print("Dataset path: " + str(data_directory))
 
     image_count = len(list(data_directory.glob("*.jpg")))
     print("Dataset size: " + str(image_count))
 
+    # Load the dataset
     list_ds = tf.data.Dataset.list_files(str(data_directory/"*"), shuffle = False)
     list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration = False)
     options = tf.data.Options()
     options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
     list_ds = list_ds.with_options(options)
 
+    # Split the dataset into training and test
     val_size = int(image_count * 0.2)
     train_ds = list_ds.skip(val_size)
     test_ds = list_ds.take(val_size)
 
+    # Define the preprocessing steps
+    resize_and_rescale = tf.keras.Sequential([
+        tf.keras.layers.Resizing(IMAGE_SIZE, IMAGE_SIZE),
+        tf.keras.layers.Rescaling(1. / 255)
+    ])
+
+    data_augmentation = tf.keras.Sequential([
+        tf.keras.layers.RandomFlip("horizontal_and_vertical"),
+        tf.keras.layers.RandomRotation(0.2),
+        tf.keras.layers.RandomZoom(0.2),
+        tf.keras.layers.RandomContrast(0.2)
+    ])
+
+    # Decode the dataset and retrive the labels
     train_ds = train_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
     test_ds = test_ds.map(process_path, num_parallel_calls = tf.data.AUTOTUNE)
 
+    # Apply the preprocessing steps
+    train_ds = train_ds.map(lambda x, y: (resize_and_rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+    train_ds = train_ds.map(lambda x, y: (data_augmentation(x, training = True), y), num_parallel_calls = tf.data.AUTOTUNE)
+    test_ds = test_ds.map(lambda x, y: (resize_and_rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+
+    # Optimize the dataset
     train_ds = configure_dataset(train_ds)
     test_ds = configure_dataset(test_ds)
 
     # Define the model
-    model = GenderNetwork(shape = (IMAGE_SIZE, IMAGE_SIZE, 3), n_channels = 64, n_classes = 2, dropout = 0, regularization = 0.01)
+    model = GenderNetwork(shape = (IMAGE_SIZE, IMAGE_SIZE, 3), n_channels = 64, n_classes = 2, dropout = 0.2, regularization = 0.01)
 
-    optimizer = tf.keras.optimizers.Nadam(learning_rate = 0.001, clipnorm = 1.0)
-    loss = tf.keras.losses.SparseCategoricalCrossentropy()
-    metrics = [tf.keras.metrics.Accuracy()]
+    optimizer = tf.keras.optimizers.Nadam(learning_rate = 0.001, weight_decay = 0.0001, use_ema = True, ema_momentum = 0.9, clipnorm = 1.0)
+    loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False)
+    metrics = [tf.keras.metrics.SparseCategoricalAccuracy()]
 
     # Compile the model
     model.compile(
