@@ -1,0 +1,32 @@
+name: gaze
+device: cpu
+model:
+  name: lenet
+dataset:
+  dir: dataset
+  name: dataset.h5
+output:
+  dir: outputs
+train:
+  batch_size: 32
+  # can be: L1, L2, SmoothL1
+  loss: L2
+  weight_decay: 0.0001
+  # can be: sgd, adam, amsgrad
+  optimizer: sgd
+  base_lr: 0.01
+  momentum: 0.9
+  nesterov: True
+  betas: 0.1
+  # the subject that is used for testing
+  test_id: 0
+  validation_ratio: 0.1
+  log_period: 10
+  checkpoint_period: 5
+scheduler:
+  epochs: 3
+  # can be: multistep, cosine
+  type: multistep
+  milestones: [ 8, 9 ]
+  lr_decay: 0.1
+  lr_min_factor: 0.001
