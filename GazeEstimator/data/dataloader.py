@@ -33,7 +33,7 @@ def create_data_loader(config: dict, is_train: bool) -> Any:
         test_dataset = create_dataset(config, is_train)
         test_loader = DataLoader(
             test_dataset,
-            batch_size=config['train']['batch_size'],
+            batch_size=config['test']['batch_size'],
             shuffle=False,
             num_workers=0,
             pin_memory=False,
@@ -61,6 +61,10 @@ def create_dataset(config: dict, is_train: bool) -> Any:
         train_num = len(train_dataset) - val_num
         lengths = [train_num, val_num]
         return torch.utils.data.dataset.random_split(train_dataset, lengths)
+    else:
+        test_subject_id = subject_ids[config['test']['test_id']]
+        test_dataset = OneSubjectDataset(test_subject_id, dataset_path, transform)
+        return test_dataset
 
 
 def create_transform() -> Any:

@@ -16,7 +16,7 @@ def test(model, test_loader, config):
     predictions = []
     gts = []
     with torch.no_grad():
-        for images, poses, gazes in enumerate(test_loader):
+        for step, (images, poses, gazes) in enumerate(test_loader):
             images = images.to(device)
             # poses = poses.to(device)
             gazes = gazes.to(device)
@@ -47,7 +47,7 @@ def main():
 
     predictions, gts, angle_error = test(model, test_loader, config)
 
-    print(f'The mean angle error (deg): {angle_error:.2f}')
+    print(f'Mean angle error (deg): {angle_error:.2f}')
 
 
 if __name__ == '__main__':
