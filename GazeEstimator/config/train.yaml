@@ -22,9 +22,9 @@ train:
   test_id: 0
   validation_ratio: 0.1
   log_period: 10
-  checkpoint_period: 5
+  checkpoint_period: 2
 scheduler:
-  epochs: 3
+  epochs: 2
   # can be: multistep, cosine
   type: multistep
   milestones: [ 8, 9 ]

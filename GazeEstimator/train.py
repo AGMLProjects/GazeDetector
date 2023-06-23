@@ -21,14 +21,12 @@ def train(epoch, model, optimizer, scheduler, loss_function, train_loader, confi
 
     # train_loader has 1181 examples inside
     for step, (images, poses, gazes) in enumerate(train_loader):
-        # extract from training set batch_size images, poses and gazes
+        # extract from training set batch_size images (32), poses and gazes
         # images are 448x448x3 channels
         images = images.to(device)
-        if step == 0:
-            for i in range(0, images.shape[0]):
-                plt.imshow(images[i].permute(1, 2, 0))
         # we don't actually need poses
         # poses = poses.to(device)
+        # gazes are 2D gaze angle vectors
         gazes = gazes.to(device)
 
         optimizer.zero_grad()
@@ -49,9 +47,8 @@ def train(epoch, model, optimizer, scheduler, loss_function, train_loader, confi
         if step % config['train']['log_period'] == 0:
             print(f'[Epoch {epoch}]'
                   f'[Step {step}/{len(train_loader)}]: '
-                  f'lr {scheduler.get_last_lr()[0]:.4f} '
-                  f'loss {loss_meter.val:.4f} (avg={loss_meter.avg:.4f}) '
-                  f'angle error {angle_error_meter.val:.2f} (avg={angle_error_meter.avg:.2f})')
+                  f'loss {loss_meter.avg:.4f}'
+                  f'angle error {angle_error_meter.avg:.2f}')
 
 
 def validate(epoch, model, loss_function, val_loader, config):
@@ -86,7 +83,7 @@ def validate(epoch, model, loss_function, val_loader, config):
 
 
 def main():
-    config = load_configs()
+    config = load_configs(is_train=True)
     output_dir = pathlib.Path(config['output']['dir'])
     set_seeds()
     setup_cudnn()

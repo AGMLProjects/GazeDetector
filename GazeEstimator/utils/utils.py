@@ -5,8 +5,12 @@ import numpy as np
 import torch
 
 
-def load_configs() -> dict:
-    config_path = pathlib.Path('config/train.yaml')
+def load_configs(is_train: bool) -> dict:
+    if is_train:
+        yaml_name = 'train.yaml'
+    else:
+        yaml_name = 'test.yaml'
+    config_path = pathlib.Path('config/{}'.format(yaml_name))
     with open(config_path, 'r') as conf:
         data = yaml.load(conf, Loader=yaml.FullLoader)
         return data

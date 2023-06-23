@@ -4,15 +4,13 @@ import torch
 from torch import nn
 
 from model.lenet import LeNet
-from model.resnet_preact import ResNetPreAct
 from model.alexnet import AlexNet
-from model.resnet_simple import ResnetSimple
+from model.resnet import ResNet, ResBlock
 
 
 def create_model(config: dict) -> torch.nn.Module:
-    # model = LeNet()
-    # model = ResNetPreAct()
     model = LeNet()
+    # model = ResNet(in_channels=3, resblock=ResBlock, outputs=2)
     device = torch.device(config['device'])
     model.to(device)
     return model

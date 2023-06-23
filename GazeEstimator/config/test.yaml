@@ -1,0 +1,7 @@
+name: gaze
+device: cpu
+model:
+  name: lenet
+test:
+  checkpoint_dir: outputs
+  checkpoint: checkpoint_model

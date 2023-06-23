@@ -1,4 +1,3 @@
-from typing import Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,11 +9,8 @@ class AlexNet(nn.Module):
         super().__init__()
         self.name = 'AlexNet'
         self.feature_extractor = torchvision.models.alexnet().features
-        # While the pretrained models of torchvision are trained using
-        # images with RGB channel order, in this repository images are
-        # treated as BGR channel order.
-        # Therefore, reverse the channel order of the first convolutional
-        # layer.
+        # In this repository images are treated as BGR channel order.
+        # Therefore, reverse the channel order of the first convolutional layer.
         module = getattr(self.feature_extractor, '0')
         module.weight.data = module.weight.data[:, [2, 1, 0]]
 
@@ -46,11 +42,7 @@ class AlexNet(nn.Module):
     def _register_hook(self) -> None:
         n_channels = self.conv1.in_channels
 
-        def hook(
-            module: nn.Module, grad_in: Union[Tuple[torch.Tensor, ...],
-                                              torch.Tensor],
-            grad_out: Union[Tuple[torch.Tensor, ...], torch.Tensor]
-        ) -> Optional[torch.Tensor]:
+        def hook(grad_in):
             return tuple(grad / n_channels for grad in grad_in)
 
         self.conv3.register_full_backward_hook(hook)
