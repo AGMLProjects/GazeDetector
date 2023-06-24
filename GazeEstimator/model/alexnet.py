@@ -1,3 +1,4 @@
+from typing import Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -42,7 +43,11 @@ class AlexNet(nn.Module):
     def _register_hook(self) -> None:
         n_channels = self.conv1.in_channels
 
-        def hook(grad_in):
+        def hook(
+            module: nn.Module, grad_in: Union[Tuple[torch.Tensor, ...],
+                                              torch.Tensor],
+            grad_out: Union[Tuple[torch.Tensor, ...], torch.Tensor]
+        ) -> Optional[torch.Tensor]:
             return tuple(grad / n_channels for grad in grad_in)
 
         self.conv3.register_full_backward_hook(hook)

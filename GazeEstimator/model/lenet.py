@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 def initialize_weights(module: torch.nn.Module) -> None:
@@ -33,6 +32,7 @@ class LeNet(nn.Module):
             nn.MaxPool2d(kernel_size=4, stride=4),
         )
 
+        # TODO: change name in 'regression'
         self.classifier = nn.Sequential(
             nn.Linear(256 * 5 * 5, 120),
             nn.ReLU(),

@@ -1,7 +1,7 @@
 name: gaze
 device: cpu
 model:
-  name: lenet
+  name: alexnet
 dataset:
   dir: dataset
   name: dataset.h5
@@ -18,11 +18,11 @@ train:
   momentum: 0.9
   nesterov: True
   betas: 0.1
-  # the subject that is used for testing
+  # the subject used for testing
   test_id: 0
   validation_ratio: 0.1
   log_period: 10
-  checkpoint_period: 2
+  checkpoint_period: 1
 scheduler:
   epochs: 2
   # can be: multistep, cosine

@@ -9,8 +9,15 @@ from model.resnet import ResNet, ResBlock
 
 
 def create_model(config: dict) -> torch.nn.Module:
-    model = LeNet()
-    # model = ResNet(in_channels=3, resblock=ResBlock, outputs=2)
+    model_name = config['model']['name']
+    if model_name == 'lenet':
+        model = LeNet()
+    elif model_name == 'alexnet':
+        model = AlexNet()
+    elif model_name == 'resnet':
+        model = ResNet(in_channels=3, resblock=ResBlock, outputs=2)
+    else:
+        raise ValueError()
     device = torch.device(config['device'])
     model.to(device)
     return model

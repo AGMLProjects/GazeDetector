@@ -47,7 +47,7 @@ def train(epoch, model, optimizer, scheduler, loss_function, train_loader, confi
         if step % config['train']['log_period'] == 0:
             print(f'[Epoch {epoch}]'
                   f'[Step {step}/{len(train_loader)}]: '
-                  f'loss {loss_meter.avg:.4f}'
+                  f'loss {loss_meter.avg:.4f} '
                   f'angle error {angle_error_meter.avg:.2f}')
 
 

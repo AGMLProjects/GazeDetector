@@ -6,6 +6,9 @@ import torch.nn as nn
 class ResNet(nn.Module):
     def __init__(self, in_channels, resblock, outputs=1000):
         super().__init__()
+
+        self.name = 'ResNet18'
+
         self.layer0 = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
@@ -43,7 +46,8 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.gap(x)
-        x = torch.flatten(x)
+        # x = torch.flatten(x)
+        x = torch.flatten(x, start_dim=1)
         x = self.fc(x)
         return x
 
