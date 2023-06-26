@@ -5,7 +5,7 @@ from torch import nn
 
 from model.lenet import LeNet
 from model.alexnet import AlexNet
-from model.resnet import ResNet, ResBlock
+from model.resnet import ResNet18
 
 
 def create_model(config: dict) -> torch.nn.Module:
@@ -15,7 +15,7 @@ def create_model(config: dict) -> torch.nn.Module:
     elif model_name == 'alexnet':
         model = AlexNet()
     elif model_name == 'resnet':
-        model = ResNet(in_channels=3, resblock=ResBlock, outputs=2)
+        model = ResNet18()
     else:
         raise ValueError()
     device = torch.device(config['device'])

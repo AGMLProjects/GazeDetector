@@ -1,7 +1,6 @@
 import datetime
 import pathlib
 import torch
-import matplotlib.pyplot as plt
 from fvcore.common.checkpoint import Checkpointer
 
 from data.dataloader import create_data_loader

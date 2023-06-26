@@ -1,12 +1,12 @@
 name: gaze
 device: cpu
 model:
-  name: lenet
+  name: resnet
 dataset:
   dir: dataset
   name: dataset.h5
 test:
   test_id: 0
   checkpoint_dir: outputs
-  checkpoint: trained_model_202306231659.pth
+  checkpoint: resnet_20230626.pth
   batch_size: 256

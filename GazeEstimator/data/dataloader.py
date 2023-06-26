@@ -70,7 +70,7 @@ def create_dataset(config: dict, is_train: bool) -> Any:
 def create_transform() -> Any:
     scale = torchvision.transforms.Lambda(lambda x: x.astype(np.float32) / 255)
     identity = torchvision.transforms.Lambda(lambda x: x)
-    size = 448
+    size = 224
     # This was a property
     if size != 448:
         resize = torchvision.transforms.Lambda(

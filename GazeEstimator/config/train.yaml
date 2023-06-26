@@ -1,7 +1,7 @@
 name: gaze
 device: cpu
 model:
-  name: alexnet
+  name: resnet
 dataset:
   dir: dataset
   name: dataset.h5
@@ -24,7 +24,7 @@ train:
   log_period: 10
   checkpoint_period: 1
 scheduler:
-  epochs: 2
+  epochs: 1
   # can be: multistep, cosine
   type: multistep
   milestones: [ 8, 9 ]

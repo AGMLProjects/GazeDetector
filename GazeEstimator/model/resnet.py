@@ -1,77 +1,84 @@
+from typing import Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torchvision
 
 
-# ResNet 18 from here: https://towardsdev.com/implement-resnet-with-pytorch-a9fb40a77448
-class ResNet(nn.Module):
-    def __init__(self, in_channels, resblock, outputs=1000):
+class ResNet18(nn.Module):
+    def __init__(self):
         super().__init__()
-
         self.name = 'ResNet18'
+        self.feature_extractor = Backbone()
+        n_channels = self.feature_extractor.n_features
 
-        self.layer0 = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU()
-        )
+        self.conv = nn.Conv2d(n_channels, 1, kernel_size=1, stride=1, padding=0)
+        # This model assumes the input image size is 224x224.
+        self.fc = nn.Linear(n_channels * 14**2, 2)
 
-        self.layer1 = nn.Sequential(
-            resblock(64, 64, downsample=False),
-            resblock(64, 64, downsample=False)
-        )
+        self._register_hook()
+        self._initialize_weight()
 
-        self.layer2 = nn.Sequential(
-            resblock(64, 128, downsample=True),
-            resblock(128, 128, downsample=False)
-        )
+    def _initialize_weight(self) -> None:
+        nn.init.kaiming_normal_(self.conv.weight)
+        nn.init.zeros_(self.conv.bias)
+        nn.init.xavier_normal_(self.fc.weight)
+        nn.init.zeros_(self.fc.bias)
 
-        self.layer3 = nn.Sequential(
-            resblock(128, 256, downsample=True),
-            resblock(256, 256, downsample=False)
-        )
+    def _register_hook(self):
+        n_channels = self.feature_extractor.n_features
 
-        self.layer4 = nn.Sequential(
-            resblock(256, 512, downsample=True),
-            resblock(512, 512, downsample=False)
-        )
+        def hook(
+            module: nn.Module, grad_in: Union[Tuple[torch.Tensor, ...],
+                                              torch.Tensor],
+            grad_out: Union[Tuple[torch.Tensor, ...], torch.Tensor]
+        ) -> Optional[torch.Tensor]:
+            return tuple(grad / n_channels for grad in grad_in)
 
-        self.gap = torch.nn.AdaptiveAvgPool2d(1)
-        self.fc = torch.nn.Linear(512, outputs)
+        self.conv.register_full_backward_hook(hook)
 
-    def forward(self, x):
-        x = self.layer0(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.gap(x)
-        # x = torch.flatten(x)
-        x = torch.flatten(x, start_dim=1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.feature_extractor(x)
+        y = F.relu(self.conv(x))
+        x = x * y
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
 
 
-class ResBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, downsample):
-        super().__init__()
-        if downsample:
-            self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1)
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=2),
-                nn.BatchNorm2d(out_channels)
-            )
-        else:
-            self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
-            self.shortcut = nn.Sequential()
+class Backbone(torchvision.models.ResNet):
+    def __init__(self):
+        block = torchvision.models.resnet.BasicBlock
+        layers = [2, 2, 2] + [1]
+        super().__init__(block, layers)
+        del self.layer4
+        del self.avgpool
+        del self.fc
 
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.bn2 = nn.BatchNorm2d(out_channels)
+        # state_dict = torch.hub.load_state_dict_from_url(torchvision.models.resnet.model_urls[pretrained_name])
+        state_dict = torch.hub.load_state_dict_from_url('https://download.pytorch.org/models/resnet18-5c106cde.pth')
+        self.load_state_dict(state_dict, strict=False)
+        # While the pretrained models of torchvision are trained
+        # using images with RGB channel order, in this repository
+        # images are treated as BGR channel order.
+        # Therefore, reverse the channel order of the first
+        # convolutional layer.
+        module = self.conv1
+        module.weight.data = module.weight.data[:, [2, 1, 0]]
 
-    def forward(self, input):
-        shortcut = self.shortcut(input)
-        input = nn.ReLU()(self.bn1(self.conv1(input)))
-        input = nn.ReLU()(self.bn2(self.conv2(input)))
-        input = input + shortcut
-        return nn.ReLU()(input)
+        with torch.no_grad():
+            data = torch.zeros((1, 3, 224, 224), dtype=torch.float32)
+            features = self.forward(data)
+            self.n_features = features.shape[1]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        return x
