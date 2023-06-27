@@ -1,7 +1,9 @@
 from os import listdir
 import cv2
 
+
 DIR = "./Gender/"
+'''CIAOOOO'''
 
 #for filename in listdir('C:/tensorflow/models/research/object_detection/images/train'):
 count = 0
