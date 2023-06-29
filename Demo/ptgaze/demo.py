@@ -2,6 +2,7 @@ import datetime
 import logging
 import pathlib
 from typing import Optional
+from matplotlib import pyplot as plt
 
 import cv2
 import numpy as np
@@ -35,6 +36,10 @@ class Demo:
         self.show_landmarks = self.config.demo.show_landmarks
         self.show_normalized_image = self.config.demo.show_normalized_image
         self.show_template_model = self.config.demo.show_template_model
+
+        self.window_width = 200
+        self.window_height = 200
+        self.heatmap = np.zeros((self.window_width, self.window_height))
 
     def run(self) -> None:
         if self.config.demo.use_camera or self.config.demo.video_path:
@@ -96,6 +101,9 @@ class Demo:
 
         if self.config.demo.use_camera:
             self.visualizer.image = self.visualizer.image[:, ::-1]
+            self.window_camera_width = self.visualizer.image.shape[1]
+            self.window_camera_height = self.visualizer.image.shape[0]
+
         if self.writer:
             self.writer.write(self.visualizer.image)
 
@@ -155,6 +163,11 @@ class Demo:
         key = cv2.waitKey(self.config.demo.wait_time) & 0xff
         if key in self.QUIT_KEYS:
             self.stop = True
+            if self.config.demo.use_camera:
+                plt.imshow(np.swapaxes(self.heatmap, 0, 1), interpolation='nearest')
+            else:
+                plt.imshow(np.rot90(self.heatmap, 3, (0, 1)), interpolation='nearest')
+            plt.show()
         elif key == ord('b'):
             self.show_bbox = not self.show_bbox
         elif key == ord('l'):
@@ -219,18 +232,24 @@ class Demo:
 
     def _draw_gaze_vector(self, face: Face) -> None:
         length = self.config.demo.gaze_visualization_length
-        if self.config.mode == 'MPIIGaze':
-            for key in [FacePartsName.REYE, FacePartsName.LEYE]:
-                eye = getattr(face, key.name.lower())
-                self.visualizer.draw_3d_line(
-                    eye.center, eye.center + length * eye.gaze_vector)
-                pitch, yaw = np.rad2deg(eye.vector_to_angle(eye.gaze_vector))
-                logger.info(
-                    f'[{key.name.lower()}] pitch: {pitch:.2f}, yaw: {yaw:.2f}')
-        elif self.config.mode in ['MPIIFaceGaze', 'ETH-XGaze']:
-            self.visualizer.draw_3d_line(
-                face.center, face.center + length * face.gaze_vector)
-            pitch, yaw = np.rad2deg(face.vector_to_angle(face.gaze_vector))
-            logger.info(f'[face] pitch: {pitch:.2f}, yaw: {yaw:.2f}')
-        else:
-            raise ValueError
+
+        self.visualizer.draw_3d_line(face.center, face.center + length * face.gaze_vector)
+        # camera a 90
+        pitch, yaw = np.rad2deg(face.vector_to_angle(face.gaze_vector))
+
+        window_width = self.visualizer.image.shape[1]
+        window_height = self.visualizer.image.shape[0]
+        x = window_width - face.bbox_center[0]
+        y = face.bbox_center[1]
+        print(f'[face center coordinates] ({x:.2f}, {y:.2f})')
+
+        xv, yv, _ = -face.normalized_gaze_vector
+        # normalization between [-1, 1]
+        xv = ((xv + 0.5) * 2) - 1
+        yv = ((yv + 0.5) * 2) - 1
+        print(f'[gaze vector] ({xv:.2f}, {yv:.2f})')
+
+        x_projected = int((self.window_width / 2) + xv * 100)
+        y_projected = int((self.window_height / 2) - yv * 100)
+        print(f'[heatmap coordinates] ({x_projected}, {y_projected})')
+        self.heatmap[x_projected, y_projected] += 10

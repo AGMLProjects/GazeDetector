@@ -13,18 +13,19 @@ face_detector:
   mediapipe_max_num_faces: 3
   mediapipe_static_image_mode: false
 gaze_estimator:
-  checkpoint: C:\uni\cv\GazeDetectionProject\GazeEstimator\outputs\resnet_20230626.pth
+  checkpoint: ~/.ptgaze/models/mpiifacegaze_resnet_simple.pth
+  #checkpoint: C:\uni\cv\GazeDetectionProject\GazeEstimator\outputs\resnet_20230626.pth
   camera_params: ${PACKAGE_ROOT}/data/calib/sample_params.yaml
   use_dummy_camera_params: false
   normalized_camera_params: ${PACKAGE_ROOT}/data/normalized_camera_params/mpiifacegaze.yaml
   normalized_camera_distance: 1.0
   image_size: [224, 224]
 demo:
-  use_camera: true
+  use_camera: false
   display_on_screen: true
   wait_time: 1
   image_path: null
-  video_path: null
+  video_path: C:\uni\cv\GazeDetectionProject\Demo\assets\inputs\demo.mp4
   output_dir: null
   output_file_extension: avi
   head_pose_axis_length: 0.05

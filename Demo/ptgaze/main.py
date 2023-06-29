@@ -8,9 +8,9 @@ from omegaconf import DictConfig, OmegaConf
 
 from demo import Demo
 from utils import (check_path_all, download_dlib_pretrained_model,
-                    download_ethxgaze_model, download_mpiifacegaze_model,
-                    download_mpiigaze_model, expanduser_all,
-                    generate_dummy_camera_params)
+                   download_mpiifacegaze_model,
+                   expanduser_all,
+                   generate_dummy_camera_params)
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +21,16 @@ def parse_args() -> argparse.Namespace:
         '--config',
         type=str,
         help='Config file. When using a config file, all the other '
-        'commandline arguments are ignored. '
-        'See https://github.com/hysts/pytorch_mpiigaze_demo/ptgaze/data/configs/eth-xgaze.yaml'
+             'commandline arguments are ignored. '
+             'See https://github.com/hysts/pytorch_mpiigaze_demo/ptgaze/data/configs/eth-xgaze.yaml'
     )
     parser.add_argument(
         '--mode',
         type=str,
         choices=['mpiigaze', 'mpiifacegaze', 'eth-xgaze'],
         help='With \'mpiigaze\', MPIIGaze model will be used. '
-        'With \'mpiifacegaze\', MPIIFaceGaze model will be used. '
-        'With \'eth-xgaze\', ETH-XGaze model will be used.')
+             'With \'mpiifacegaze\', MPIIFaceGaze model will be used. '
+             'With \'eth-xgaze\', ETH-XGaze model will be used.')
     parser.add_argument(
         '--face-detector',
         type=str,
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
             'dlib', 'face_alignment_dlib', 'face_alignment_sfd', 'mediapipe'
         ],
         help='The method used to detect faces and find face landmarks '
-        '(default: \'mediapipe\')')
+             '(default: \'mediapipe\')')
     parser.add_argument('--device',
                         type=str,
                         choices=['cpu', 'cuda'],
@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
         '--camera',
         type=str,
         help='Camera calibration file. '
-        'See https://github.com/hysts/pytorch_mpiigaze_demo/ptgaze/data/calib/sample_params.yaml'
+             'See https://github.com/hysts/pytorch_mpiigaze_demo/ptgaze/data/calib/sample_params.yaml'
     )
     parser.add_argument(
         '--output-dir',
@@ -71,7 +71,7 @@ def parse_args() -> argparse.Namespace:
         '--no-screen',
         action='store_true',
         help='If specified, the video is not displayed on screen, and saved '
-        'to the output directory.')
+             'to the output directory.')
     parser.add_argument('--debug', action='store_true')
     return parser.parse_args()
 
