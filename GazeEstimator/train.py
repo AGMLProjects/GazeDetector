@@ -8,7 +8,7 @@ from model.models import create_model, create_loss, create_optimizer, create_sch
 from utils.utils import load_configs, set_seeds, setup_cudnn, AverageMeter, compute_angle_error
 
 
-def train(epoch, model, optimizer, scheduler, loss_function, train_loader, config):
+def train(epoch, model, optimizer, loss_function, train_loader, config):
     print(f'Started training (epoch {epoch})')
 
     model.train()
@@ -83,6 +83,10 @@ def validate(epoch, model, loss_function, val_loader, config):
 
 def main():
     config = load_configs(is_train=True)
+    if config['device'] == 'auto':
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        config['device'] = device
+    print('Running on device: {}'.format(device))
     output_dir = pathlib.Path(config['output']['dir'])
     set_seeds()
     setup_cudnn()

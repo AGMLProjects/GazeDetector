@@ -1,5 +1,5 @@
 name: gaze
-device: cpu
+device: auto
 model:
   name: resnet
 dataset:
