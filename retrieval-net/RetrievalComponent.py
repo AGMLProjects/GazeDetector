@@ -46,8 +46,13 @@ class RetrievalComponent:
         target_variables = []
         total_requests = len(loader)
         elaborated_requests = 0
-        for x, y in loader:
-            x_aligned, prob = mtcnn(x, return_prob=True)
+        for path, x, y in loader:
+            try:
+                x_aligned, prob = mtcnn(x, return_prob=True)
+            except Exception:
+                print(x)
+                print(path)
+                raise
             if x_aligned is not None:
                 aligned.append(x_aligned)
                 target_variables.append(y)

@@ -17,7 +17,7 @@ class CustomDataset(Dataset):
         image_path = self.image_paths[idx]
         image = self.load_image(image_path)
         target = self.targets[idx]
-        return image, target
+        return image_path, image, target
 
     def get_image_paths_and_targets(self):
         image_paths = []
@@ -36,6 +36,7 @@ class CustomDataset(Dataset):
 
     def load_image(self, image_path):
         image = Image.open(image_path)
+        image = image.convert('RGB')
         # We could add some preprocessing steps if needed
         # For example:
         # image = image.resize((256, 256))  # Resize the image
