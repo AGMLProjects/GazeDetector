@@ -5,9 +5,8 @@ from torch.utils.data import Dataset
 
 
 class CustomDataset(Dataset):
-    def __init__(self, root_dir, target_variable):
+    def __init__(self, root_dir):
         self.root_dir = root_dir
-        self.target_variable = target_variable
         self.image_paths, self.targets = self.get_image_paths_and_targets()
 
     def __len__(self):
@@ -26,12 +25,7 @@ class CustomDataset(Dataset):
             for file in files:
                 if file.endswith('.jpg'):
                     image_paths.append(os.path.join(root, file))
-                    if self.target_variable == 'gender':
-                        targets.append(int(file.split('_')[1]))
-                    elif self.target_variable == 'age':
-                        targets.append(int(file.split('_')[0]))
-                    else:
-                        raise ValueError('Target variable ' + self.target_variable + ' handling not implemented yet')
+                    targets.append((int(file.split('_')[1]), int(file.split('_')[0])))
         return image_paths, targets
 
     def load_image(self, image_path):

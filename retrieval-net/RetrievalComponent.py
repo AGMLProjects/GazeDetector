@@ -18,11 +18,9 @@ def collate_fn(batch):
 
 class RetrievalComponent:
 
-    def __init__(self, target_variable):
+    def __init__(self):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print('Running on device: {}'.format(self.device))
-        self.target_variable = target_variable
-        print('Retrieval component will work on: {}'.format(self.target_variable))
 
     def calculate_embeddings(self, dataset_folder, embedding_file):
         workers = 0 if os.name == 'nt' else 2
@@ -37,7 +35,7 @@ class RetrievalComponent:
         # InceptionResnetV1 -> face recognition
         resnet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
 
-        dataset = CustomDataset(dataset_folder, self.target_variable)
+        dataset = CustomDataset(dataset_folder)
         loader = DataLoader(dataset, collate_fn=collate_fn, num_workers=workers)
 
         print("Starting face detection.")
@@ -73,17 +71,18 @@ class RetrievalComponent:
 
         embeddings_df = pd.DataFrame(embeddings_array,
                                      columns=["embedding_dim_" + str(i) for i in range(embeddings_array.shape[1])])
-        embeddings_df[self.target_variable] = target_variables
+        embeddings_df['gender'] = [t[0] for t in target_variables]
+        embeddings_df['age'] = [t[1] for t in target_variables]
 
         embeddings_df.to_csv(embedding_file, index=False)
 
-    def get_most_similar_embedding(self, embedding_file, image_path):
+    def get_most_similar_embedding(self, embedding_file, image_path, target_variable):
 
         embeddings_df = pd.read_csv(embedding_file)
 
-        embeddings = embeddings_df.iloc[:, :-1].values
+        embeddings = embeddings_df.iloc[:, :-2].values
 
-        df_target_variables = embeddings_df[self.target_variable].values
+        df_target_variables = embeddings_df[target_variable].values
 
         resnet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
 
@@ -116,6 +115,6 @@ class RetrievalComponent:
 
         most_similar_target_variable = df_target_variables[most_similar_index]
 
-        print('Most similar {}: {}'.format(self.target_variable, most_similar_target_variable))
+        print('Most similar {}: {}'.format(target_variable, most_similar_target_variable))
 
         return most_similar_target_variable, max_similarity, new_embedding
