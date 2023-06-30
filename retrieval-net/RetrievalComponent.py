@@ -19,8 +19,6 @@ def collate_fn(batch):
 
 class RetrievalComponent:
 
-    temp_file_path = 'data_bk.pkl'
-
     def __init__(self):
         np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -59,43 +57,27 @@ class RetrievalComponent:
                 if elaborated_requests % batch_size == 0 or elaborated_requests == len(dataset.image_paths):
                     print(f"Detected {elaborated_requests} faces out of {len(dataset.image_paths)} total faces.")
 
-        print("Face detection ended. Saving results...")
+        print("Face detection ended.")
+        return aligned, target_variables
 
-        data = {
-            'aligned': aligned,
-            'target_variables': target_variables
-        }
-        with open(self.temp_file_path, 'wb') as f:
-            pickle.dump(data, f)
-
-        print("Face detection results saved to {}.".format(self.temp_file_path))
-
-    def perform_face_recognition(self, batch_size, embedding_file):
-        print("Start embeddings' calculation.")
-
-        with open(self.temp_file_path, 'rb') as f:
-            data = pickle.load(f)
-
-            aligned = data['aligned']
-            target_variables = data['target_variables']
-
-        print("Loaded previous face detection results from {}.".format(self.temp_file_path))
+    def perform_face_recognition(self, aligned, target_variables, batch_size, embedding_file):
+        print("Starting embeddings calculation.")
 
         # InceptionResnetV1 -> face recognition
         resnet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
 
         batched_embeddings = []
         for i in range(0, len(aligned), batch_size):
-            print('Calulated embedding for {} faces'.format(i))
+            print('Calculated embedding for {} faces'.format(i))
             batch_aligned = aligned[i:i + batch_size]
             batch_aligned = torch.stack(batch_aligned).to(self.device)
             batch_embeddings = resnet(batch_aligned).detach().cpu().numpy()
             batched_embeddings.append(batch_embeddings)
-        print('Calulated embedding for {} faces'.format(len(aligned)))
+        print('Calculated embedding for {} faces'.format(len(aligned)))
 
         embeddings = np.concatenate(batched_embeddings, axis=0)
 
-        print("Embeddings' calculation ended. Saving results...")
+        print("Embeddings calculation ended. Saving results...")
 
         embeddings_df = pd.DataFrame(embeddings,
                                      columns=["embedding_dim_" + str(i) for i in range(embeddings.shape[1])])
@@ -107,10 +89,9 @@ class RetrievalComponent:
         print("Embeddings saved to {}".format(embedding_file))
 
     def calculate_embeddings(self, dataset_folder, embedding_file, batch_size=200):
-        if not os.path.exists(self.temp_file_path) or os.path.getsize(self.temp_file_path) == 0:
-            self.perform_face_detection(dataset_folder, batch_size)
+        aligned, target_variables = self.perform_face_detection(dataset_folder, batch_size)
 
-        self.perform_face_recognition(batch_size, embedding_file)
+        self.perform_face_recognition(aligned, target_variables, batch_size, embedding_file)
 
     def get_most_similar_embedding(self, embedding_file, image_path, target_variable):
 
@@ -136,13 +117,8 @@ class RetrievalComponent:
 
         similarities = cosine_similarity(new_embedding.reshape(1, -1), embeddings)
 
-        maximum_similarity = np.max(similarities)
-        if maximum_similarity >= 0.999:
-            # Get the index of the second maximum value
-            most_similar_index = np.argpartition(similarities[0], -2)[-2]
-        else:
-            # Find the index of the most similar embedding
-            most_similar_index = np.argmax(similarities)
+        # Get the index of the second maximum value
+        most_similar_index = np.argpartition(similarities[0], -2)[-2]
 
         max_similarity = similarities[0][most_similar_index]
 
