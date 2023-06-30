@@ -22,6 +22,7 @@ class RetrievalComponent:
     temp_file_path = 'data_bk.pkl'
 
     def __init__(self):
+        np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print('Running on device: {}'.format(self.device))
 
