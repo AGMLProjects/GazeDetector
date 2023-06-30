@@ -1,4 +1,5 @@
 import os
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -8,13 +9,12 @@ from facenet_pytorch import InceptionResnetV1
 from facenet_pytorch.models.mtcnn import MTCNN
 from sklearn.metrics.pairwise import cosine_similarity
 from torch.utils.data import DataLoader
-import pickle
 
 from CustomDataset import CustomDataset
 
 
 def collate_fn(batch):
-    return batch[0]
+    return batch
 
 
 class RetrievalComponent:
@@ -38,21 +38,25 @@ class RetrievalComponent:
         )
 
         dataset = CustomDataset(dataset_folder)
-        loader = DataLoader(dataset, collate_fn=collate_fn, num_workers=workers)
+        loader = DataLoader(dataset, collate_fn=collate_fn, num_workers=workers, batch_size=batch_size)
 
         aligned = []
         target_variables = []
-        total_requests = len(loader)
+        total_batches = len(loader)
+        print("Total number of images: {}, using batch size: {}, total number of batches: {}".format(len(dataset.image_paths), batch_size, total_batches))
         elaborated_requests = 0
-        for path, x, y in loader:
-            x_aligned, prob = mtcnn(x, return_prob=True)
+        for batch in loader:
+            paths, xs, ys = zip(*batch)
 
-            if x_aligned is not None:
-                aligned.append(x_aligned)
-                target_variables.append(y)
-            elaborated_requests += 1
-            if elaborated_requests % batch_size == 0 or elaborated_requests == total_requests:
-                print(f"Detected {elaborated_requests} faces out of {total_requests} total faces.")
+            xs_aligned, probs = mtcnn(xs, return_prob=True)
+
+            for x_aligned, y in zip(xs_aligned, ys):
+                if x_aligned is not None:
+                    aligned.append(x_aligned)
+                    target_variables.append(y)
+                elaborated_requests += 1
+                if elaborated_requests % batch_size == 0 or elaborated_requests == len(dataset.image_paths):
+                    print(f"Detected {elaborated_requests} faces out of {len(dataset.image_paths)} total faces.")
 
         print("Face detection ended. Saving results...")
 

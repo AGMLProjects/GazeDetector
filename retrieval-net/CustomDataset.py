@@ -33,6 +33,6 @@ class CustomDataset(Dataset):
         image = image.convert('RGB')
         # We could add some preprocessing steps if needed
         # For example:
-        # image = image.resize((256, 256))  # Resize the image
+        image = image.resize((160, 160))  # Resize the image
         # image = some_other_preprocessing(image)
         return image
