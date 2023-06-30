@@ -22,7 +22,7 @@ class RetrievalComponent:
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print('Running on device: {}'.format(self.device))
 
-    def calculate_embeddings(self, dataset_folder, embedding_file):
+    def calculate_embeddings(self, dataset_folder, embedding_file, batch_size=200):
         workers = 0 if os.name == 'nt' else 2
 
         # MTCNN (Multi-task Cascaded Convolutional Networks) -> face detection
@@ -55,22 +55,27 @@ class RetrievalComponent:
                 aligned.append(x_aligned)
                 target_variables.append(y)
             elaborated_requests += 1
-            if elaborated_requests % 200 == 0 or elaborated_requests == total_requests:
+            if elaborated_requests % batch_size == 0 or elaborated_requests == total_requests:
                 print(f"Detected {elaborated_requests} faces out of {total_requests} total faces.")
 
         print("Face detection ended.")
 
-        # TODO For real datasets, code should be modified to control batch sizes being passed to the Resnet
-        aligned = torch.stack(aligned).to(self.device)
-
         print("Start embeddings' calculation.")
-        embeddings = resnet(aligned).detach().cpu()
+
+        batched_embeddings = []
+        for i in range(0, len(aligned), batch_size):
+            print('Calulated embedding for {} faces'.format(i))
+            batch_aligned = aligned[i:i + batch_size]
+            batch_aligned = torch.stack(batch_aligned).to(self.device)
+            batch_embeddings = resnet(batch_aligned).detach().cpu().numpy()
+            batched_embeddings.append(batch_embeddings)
+
+        embeddings = np.concatenate(batched_embeddings, axis=0)
+
         print("Embeddings' calculation ended.")
 
-        embeddings_array = embeddings.numpy()
-
-        embeddings_df = pd.DataFrame(embeddings_array,
-                                     columns=["embedding_dim_" + str(i) for i in range(embeddings_array.shape[1])])
+        embeddings_df = pd.DataFrame(embeddings,
+                                     columns=["embedding_dim_" + str(i) for i in range(embeddings.shape[1])])
         embeddings_df['gender'] = [t[0] for t in target_variables]
         embeddings_df['age'] = [t[1] for t in target_variables]
 
