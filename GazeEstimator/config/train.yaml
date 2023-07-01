@@ -3,10 +3,10 @@ device: auto
 model:
   name: resnet
 dataset:
-  dir: dataset
+  dir: /homes/lventurelli/Resources/GazeEstimator/dataset
   name: dataset.h5
 output:
-  dir: outputs
+  dir: /homes/lventurelli/Resources/GazeEstimator/outputs
 train:
   batch_size: 32
   # can be: L1, L2, SmoothL1
@@ -21,10 +21,10 @@ train:
   # the subject used for testing
   test_id: 0
   validation_ratio: 0.1
-  log_period: 10
+  log_period: 20
   checkpoint_period: 1
 scheduler:
-  epochs: 1
+  epochs: 3
   # can be: multistep, cosine
   type: multistep
   milestones: [ 8, 9 ]

@@ -34,7 +34,10 @@ def test(model, test_loader, config):
 
 def main():
     config = load_configs(is_train=False)
-
+    if config['device'] == 'auto':
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        config['device'] = device
+    print('Running on device: {}'.format(config['device']))
     test_loader = create_data_loader(config, is_train=False)
     print('Initialized test loader')
     model = create_model(config)

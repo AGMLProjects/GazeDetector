@@ -142,14 +142,10 @@ def main():
     if config.face_detector.mode == 'dlib':
         download_dlib_pretrained_model()
     if args.mode:
-        if config.mode == 'MPIIGaze':
-            download_mpiigaze_model()
-        elif config.mode == 'MPIIFaceGaze':
-            download_mpiifacegaze_model()
-        elif config.mode == 'ETH-XGaze':
-            download_ethxgaze_model()
+        download_mpiifacegaze_model()
 
     check_path_all(config)
 
     demo = Demo(config)
     demo.run()
+    demo.show_heatmap()

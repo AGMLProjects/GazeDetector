@@ -86,7 +86,7 @@ def main():
     if config['device'] == 'auto':
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         config['device'] = device
-    print('Running on device: {}'.format(device))
+    print('Running on device: {}'.format(config['device']))
     output_dir = pathlib.Path(config['output']['dir'])
     set_seeds()
     setup_cudnn()
@@ -109,7 +109,7 @@ def main():
     # validate(0, model, loss_function, val_loader, config)
 
     for epoch in range(1, config['scheduler']['epochs'] + 1):
-        train(epoch, model, optimizer, scheduler, loss_function, train_loader, config)
+        train(epoch, model, optimizer, loss_function, train_loader, config)
         validate(epoch, model, loss_function, val_loader, config)
 
         if epoch % config['train']['checkpoint_period'] == 0 or epoch == config['scheduler']['epochs']:

@@ -1,5 +1,4 @@
 import datetime
-import logging
 import pathlib
 from typing import Optional
 from matplotlib import pyplot as plt
@@ -8,12 +7,9 @@ import cv2
 import numpy as np
 from omegaconf import DictConfig
 
-from common import Face, FacePartsName, Visualizer
+from common import Face, Visualizer
 from gaze_estimator import GazeEstimator
 from utils import get_3d_face_model
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class Demo:
@@ -23,8 +19,7 @@ class Demo:
         self.config = config
         self.gaze_estimator = GazeEstimator(config)
         face_model_3d = get_3d_face_model(config)
-        self.visualizer = Visualizer(self.gaze_estimator.camera,
-                                     face_model_3d.NOSE_INDEX)
+        self.visualizer = Visualizer(self.gaze_estimator.camera, face_model_3d.NOSE_INDEX)
 
         self.cap = self._create_capture()
         self.output_dir = self._create_output_dir()
@@ -37,9 +32,9 @@ class Demo:
         self.show_normalized_image = self.config.demo.show_normalized_image
         self.show_template_model = self.config.demo.show_template_model
 
-        self.window_width = 200
-        self.window_height = 200
-        self.heatmap = np.zeros((self.window_width, self.window_height))
+        self.heatmap_width = self.config.demo.heatmap_width
+        self.heatmap_height = self.config.demo.heatmap_height
+        self.heatmap = np.zeros((self.heatmap_width, self.heatmap_height))
 
     def run(self) -> None:
         if self.config.demo.use_camera or self.config.demo.video_path:
@@ -163,11 +158,6 @@ class Demo:
         key = cv2.waitKey(self.config.demo.wait_time) & 0xff
         if key in self.QUIT_KEYS:
             self.stop = True
-            if self.config.demo.use_camera:
-                plt.imshow(np.swapaxes(self.heatmap, 0, 1), interpolation='nearest')
-            else:
-                plt.imshow(np.rot90(self.heatmap, 3, (0, 1)), interpolation='nearest')
-            plt.show()
         elif key == ord('b'):
             self.show_bbox = not self.show_bbox
         elif key == ord('l'):
@@ -196,8 +186,7 @@ class Demo:
 
         euler_angles = face.head_pose_rot.as_euler('XYZ', degrees=True)
         pitch, yaw, roll = face.change_coordinate_system(euler_angles)
-        logger.info(f'[head] pitch: {pitch:.2f}, yaw: {yaw:.2f}, '
-                    f'roll: {roll:.2f}, distance: {face.distance:.2f}')
+        print(f'[head] pitch: {pitch:.2f}, yaw: {yaw:.2f}, 'f'roll: {roll:.2f}, distance: {face.distance:.2f}')
 
     def _draw_landmarks(self, face: Face) -> None:
         if not self.show_landmarks:
@@ -235,7 +224,7 @@ class Demo:
 
         self.visualizer.draw_3d_line(face.center, face.center + length * face.gaze_vector)
         # camera a 90
-        pitch, yaw = np.rad2deg(face.vector_to_angle(face.gaze_vector))
+        # pitch, yaw = np.rad2deg(face.vector_to_angle(face.gaze_vector))
 
         window_width = self.visualizer.image.shape[1]
         window_height = self.visualizer.image.shape[0]
@@ -249,7 +238,17 @@ class Demo:
         yv = ((yv + 0.5) * 2) - 1
         print(f'[gaze vector] ({xv:.2f}, {yv:.2f})')
 
-        x_projected = int((self.window_width / 2) + xv * 100)
-        y_projected = int((self.window_height / 2) - yv * 100)
+        # working for heatmap dimension 200x200
+        # x_projected = int((self.heatmap_width / 2) + xv * 100)
+        # y_projected = int((self.heatmap_height / 2) - yv * 100)
+        x_projected = int(x + xv * x)
+        y_projected = int(y - yv * y)
         print(f'[heatmap coordinates] ({x_projected}, {y_projected})')
-        self.heatmap[x_projected, y_projected] += 10
+        self.heatmap[x_projected - 5:x_projected + 5, y_projected - 5: y_projected + 5] += 1
+
+    def show_heatmap(self):
+        if self.config.demo.use_camera:
+            plt.imshow(np.swapaxes(self.heatmap, 0, 1), cmap='hot', interpolation='nearest')
+        else:
+            plt.imshow(np.rot90(self.heatmap, 3, (0, 1)), cmap='hot', interpolation='nearest')
+        plt.show()

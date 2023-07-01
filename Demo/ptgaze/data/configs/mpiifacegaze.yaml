@@ -25,7 +25,7 @@ demo:
   display_on_screen: true
   wait_time: 1
   image_path: null
-  video_path: C:\uni\cv\GazeDetectionProject\Demo\assets\inputs\demo.mp4
+  video_path: C:\uni\cv\GazeDetectionProject\Demo\assets\inputs\demo01.mp4
   output_dir: null
   output_file_extension: avi
   head_pose_axis_length: 0.05
@@ -35,3 +35,5 @@ demo:
   show_landmarks: false
   show_normalized_image: false
   show_template_model: false
+  heatmap_width: 1280
+  heatmap_height: 720

@@ -3,10 +3,10 @@ device: auto
 model:
   name: resnet
 dataset:
-  dir: dataset
+  dir: /homes/lventurelli/Resources/GazeEstimator/dataset
   name: dataset.h5
 test:
   test_id: 0
-  checkpoint_dir: outputs
+  checkpoint_dir: /homes/lventurelli/Resources/GazeEstimator/outputs
   checkpoint: resnet_20230626.pth
   batch_size: 256
