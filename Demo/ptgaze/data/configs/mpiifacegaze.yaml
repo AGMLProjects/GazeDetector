@@ -1,5 +1,5 @@
 mode: MPIIFaceGaze
-device: cpu
+device: cuda
 model:
   name: resnet_simple
   backbone:
@@ -10,7 +10,7 @@ model:
 face_detector:
   mode: dlib
   dlib_model_path: ~/.ptgaze/dlib/shape_predictor_68_face_landmarks.dat
-  mediapipe_max_num_faces: 3
+  mediapipe_max_num_faces: 1
   mediapipe_static_image_mode: false
 gaze_estimator:
   checkpoint: ~/.ptgaze/models/mpiifacegaze_resnet_simple.pth
@@ -26,6 +26,7 @@ demo:
   wait_time: 1
   image_path: null
   video_path: C:\uni\cv\GazeDetectionProject\Demo\assets\inputs\demo01.mp4
+  #video_path: null
   output_dir: null
   output_file_extension: avi
   head_pose_axis_length: 0.05
@@ -37,3 +38,5 @@ demo:
   show_template_model: false
   heatmap_width: 1280
   heatmap_height: 720
+  #heatmap_width: 640
+  #heatmap_height: 480

@@ -13,13 +13,13 @@ class Face(FaceParts):
         # (x1, y1) --> upper right corner
         # (x2, y2) --> lower left corner
         self.bbox = bbox
-        x1 = bbox[0, 0]
-        x2 = bbox[1, 0]
-        y1 = bbox[0, 1]
-        y2 = bbox[1, 1]
-        self.bbow_width = x2 - x1
-        self.bbow_height = y2 - y1
-        self.bbox_center = (x1 + self.bbow_width / 2, y1 + self.bbow_height / 2)
+        self.x1 = bbox[0, 0]
+        self.x2 = bbox[1, 0]
+        self.y1 = bbox[0, 1]
+        self.y2 = bbox[1, 1]
+        self.bbox_width = self.x2 - self.x1
+        self.bbox_height = self.y2 - self.y1
+        self.bbox_center = (self.x1 + self.bbox_width / 2, self.y1 + self.bbox_height / 2)
         self.landmarks = landmarks
 
         self.reye: Eye = Eye(FacePartsName.REYE)

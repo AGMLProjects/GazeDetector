@@ -28,6 +28,20 @@ class Visualizer:
         bbox = np.round(bbox).astype(int).tolist()
         cv2.rectangle(self.image, tuple(bbox[0]), tuple(bbox[1]), color, lw)
 
+    def show_demographic_data(self, gender: int, age: int) -> None:
+        assert self.image is not None
+        self.image = np.array(self.image)
+        text = f'Gender: {"MALE" if gender == 1 else "FEMALE"}'
+        font = cv2.FONT_HERSHEY_PLAIN
+        org = (10, 30)
+        fontScale = 1.5
+        color = (0, 173, 3)
+        thickness = 1
+        cv2.putText(self.image, text, org, font, fontScale, color, thickness, cv2.LINE_AA)
+        text = f'Age: {age}'
+        org = (10, 55)
+        cv2.putText(self.image, text, org, font, fontScale, color, thickness, cv2.LINE_AA)
+
     @staticmethod
     def _convert_pt(point: np.ndarray) -> Tuple[int, int]:
         return tuple(np.round(point).astype(int).tolist())
