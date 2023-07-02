@@ -1,10 +1,8 @@
 import os
-import pickle
 
 import numpy as np
 import pandas as pd
 import torch
-from PIL import Image
 from facenet_pytorch import InceptionResnetV1
 from facenet_pytorch.models.mtcnn import MTCNN
 from sklearn.metrics.pairwise import cosine_similarity
@@ -93,13 +91,14 @@ class RetrievalComponent:
 
         self.perform_face_recognition(aligned, target_variables, batch_size, embedding_file)
 
-    def get_most_similar_embedding(self, embedding_file, image_path, target_variable):
+    def get_most_similar_embedding(self, embedding_file, image):
 
         embeddings_df = pd.read_csv(embedding_file)
 
         embeddings = embeddings_df.iloc[:, :-2].values
 
-        df_target_variables = embeddings_df[target_variable].values
+        df_gender = embeddings_df['gender'].values
+        df_age = embeddings_df['age'].values
 
         resnet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
 
@@ -109,8 +108,7 @@ class RetrievalComponent:
             device=self.device
         )
 
-        new_image = Image.open(image_path)
-        new_image_tensor = mtcnn(new_image)
+        new_image_tensor = mtcnn(image)
         new_image_tensor = new_image_tensor.unsqueeze(0)
 
         new_embedding = resnet(new_image_tensor.to(self.device)).detach().cpu().numpy()
@@ -125,8 +123,10 @@ class RetrievalComponent:
         print("Maximum similarity value:", max_similarity)
         print("Index of the most similar value:", most_similar_index)
 
-        most_similar_target_variable = df_target_variables[most_similar_index]
+        most_similar_gender = df_gender[most_similar_index]
+        most_similar_age = df_age[most_similar_index]
 
-        print('Most similar {}: {}'.format(target_variable, most_similar_target_variable))
+        print('Most similar gender {}'.format(most_similar_gender))
+        print('Most similar age {}'.format(most_similar_age))
 
-        return most_similar_target_variable, max_similarity, new_embedding
+        return most_similar_gender, most_similar_age, max_similarity, new_embedding
