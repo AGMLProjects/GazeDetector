@@ -85,6 +85,7 @@ class Demo:
 
         self.visualizer.set_image(image.copy())
         faces = self.gaze_estimator.detect_faces(undistorted)
+        gender, age = (-1, -1)
         for face in faces:
             self.gaze_estimator.estimate_gaze(undistorted, face)
             self._draw_face_bbox(face)
@@ -93,9 +94,15 @@ class Demo:
             self._draw_face_template_model(face)
             self._draw_gaze_vector(face)
             self._display_normalized_image(face)
+            face_frame = self._get_normalized_face(image, face)
+            # TODO: send face_frame to GraNet, receive gender and age
+            gender, age = (1, 25)
+            if not self.config.demo.use_camera:
+                self._display_demographic_data(gender, age)
 
         if self.config.demo.use_camera:
             self.visualizer.image = self.visualizer.image[:, ::-1]
+            self._display_demographic_data(gender, age)
             self.window_camera_width = self.visualizer.image.shape[1]
             self.window_camera_height = self.visualizer.image.shape[0]
 
@@ -207,17 +214,17 @@ class Demo:
             return
         if not self.show_normalized_image:
             return
-        if self.config.mode == 'MPIIGaze':
-            reye = face.reye.normalized_image
-            leye = face.leye.normalized_image
-            normalized = np.hstack([reye, leye])
-        elif self.config.mode in ['MPIIFaceGaze', 'ETH-XGaze']:
-            normalized = face.normalized_image
-        else:
-            raise ValueError
+        normalized = face.normalized_image
         if self.config.demo.use_camera:
             normalized = normalized[:, ::-1]
         cv2.imshow('normalized', normalized)
+
+    def _get_normalized_face(self, image, face):
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = image[face.y1 - 20:face.y2 + 20, face.x1 - 20:face.x2 + 20]
+        plt.imshow(image)
+        plt.show()
+        return image
 
     def _draw_gaze_vector(self, face: Face) -> None:
         length = self.config.demo.gaze_visualization_length
@@ -245,6 +252,9 @@ class Demo:
         y_projected = int(y - yv * y)
         print(f'[heatmap coordinates] ({x_projected}, {y_projected})')
         self.heatmap[x_projected - 5:x_projected + 5, y_projected - 5: y_projected + 5] += 1
+
+    def _display_demographic_data(self, gender: int, age: int) -> None:
+        self.visualizer.show_demographic_data(gender, age)
 
     def show_heatmap(self):
         if self.config.demo.use_camera:
