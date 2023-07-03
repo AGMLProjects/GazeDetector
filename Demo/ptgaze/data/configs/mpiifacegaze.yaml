@@ -14,7 +14,7 @@ face_detector:
   mediapipe_static_image_mode: false
 gaze_estimator:
   checkpoint: ~/.ptgaze/models/mpiifacegaze_resnet_simple.pth
-  #checkpoint: C:\uni\cv\GazeDetectionProject\GazeEstimator\outputs\resnet_20230626.pth
+  #checkpoint: C:\uni\cv\GazeDetectionProject\GazeEstimator\outputs\trained_model_202307021737.pth
   camera_params: ${PACKAGE_ROOT}/data/calib/sample_params.yaml
   use_dummy_camera_params: false
   normalized_camera_params: ${PACKAGE_ROOT}/data/normalized_camera_params/mpiifacegaze.yaml
@@ -25,7 +25,7 @@ demo:
   display_on_screen: true
   wait_time: 1
   image_path: null
-  video_path: C:\uni\cv\GazeDetectionProject\Demo\assets\inputs\demo01.mp4
+  video_path: C:\uni\cv\GazeDetectionProject\Demo\assets\inputs\demo00.mp4
   #video_path: null
   output_dir: null
   output_file_extension: avi
@@ -40,3 +40,8 @@ demo:
   heatmap_height: 720
   #heatmap_width: 640
   #heatmap_height: 480
+  demographic_classifier: true
+  demographic_classifier_host: 127.0.0.1
+  demographic_classifier_port: 4343
+  face_max_width: 300
+  face_max_height: 400
