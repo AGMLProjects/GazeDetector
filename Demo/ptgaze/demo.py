@@ -258,9 +258,6 @@ class Demo:
         yv = ((yv + 0.5) * 2) - 1
         print(f'[gaze vector] ({xv:.2f}, {yv:.2f})')
 
-        # working for heatmap dimension 200x200
-        # x_projected = int((self.heatmap_width / 2) + xv * 100)
-        # y_projected = int((self.heatmap_height / 2) - yv * 100)
         x_projected = int(x + xv * x)
         y_projected = int(y - yv * y)
         print(f'[heatmap coordinates] ({x_projected}, {y_projected})')
