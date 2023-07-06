@@ -14,5 +14,5 @@ with MLSocket() as s:
     s.send(data)
     return_dict = json.loads(s.recv(1024).decode('UTF-8'))
     embedding = s.recv(1024)
-    print(f"Most similar gender is {return_dict['gender']}, age is {return_dict['age']}, similarity is {return_dict['similarity']}, "
+    print(f"Status {return_dict['status']}, most similar gender is {return_dict['gender']}, age is {return_dict['age']}, similarity is {return_dict['similarity']}, "
           f"most similar embedding is {embedding}.")

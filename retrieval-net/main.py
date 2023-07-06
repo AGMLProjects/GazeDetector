@@ -26,11 +26,16 @@ if __name__ == '__main__':
                 try:
                     gender, age, similarity, embedding = retrievalComponent.get_most_similar_embedding(
                         "data/output/embeddings.csv", data)
+
+                    print(f"Most similar gender is {gender}, age is {age}, similarity is {similarity}.")
+
+                    return_dict = {'status': True, 'gender': int(gender), 'age': int(age),
+                                   'similarity': float(similarity)}
+                    conn.send(json.dumps(return_dict).encode('UTF-8'))
+                    conn.send(embedding)
                 except Exception as e:
                     print(f'Some exception occurred in finding most similar embedding. Error is: {e}')
+                    return_dict = {'status': False}
+                    conn.send(json.dumps(return_dict).encode('UTF-8'))
 
-                print(f"Most similar gender is {gender}, age is {age}, similarity is {similarity}.")
 
-                return_dict = {'gender': int(gender), 'age': int(age), 'similarity': float(similarity)}
-                conn.send(json.dumps(return_dict).encode('UTF-8'))
-                conn.send(embedding)
