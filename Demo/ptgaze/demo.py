@@ -2,6 +2,7 @@ import datetime
 import pathlib
 from typing import Optional
 from matplotlib import pyplot as plt
+from mlsocket import MLSocket
 
 import cv2
 import numpy as np
@@ -94,15 +95,23 @@ class Demo:
             self._draw_face_template_model(face)
             self._draw_gaze_vector(face)
             self._display_normalized_image(face)
-            face_frame = self._get_normalized_face(image, face)
-            # TODO: send face_frame to GraNet, receive gender and age
-            gender, age = (1, 25)
-            if not self.config.demo.use_camera:
-                self._display_demographic_data(gender, age)
+            if self.config.demo.demographic_classifier:
+                face_frame = self._get_normalized_face(image, face)
+                # TODO: send face_frame to GraNet, receive gender and age
+                '''
+                with MLSocket() as socket:
+                    connection = (self.config.demo.demographic_classifier_host, self.config.demo.demographic_classifier_port)
+                    socket.connect(connection)
+                    response = socket.send(face_frame)
+                '''
+                gender, age = (1, 25)
+                if not self.config.demo.use_camera:
+                    self._display_demographic_data(gender, age)
 
         if self.config.demo.use_camera:
             self.visualizer.image = self.visualizer.image[:, ::-1]
-            self._display_demographic_data(gender, age)
+            if self.config.demo.demographic_classifier:
+                self._display_demographic_data(gender, age)
             self.window_camera_width = self.visualizer.image.shape[1]
             self.window_camera_height = self.visualizer.image.shape[0]
 
@@ -219,11 +228,15 @@ class Demo:
             normalized = normalized[:, ::-1]
         cv2.imshow('normalized', normalized)
 
-    def _get_normalized_face(self, image, face):
+    def _get_normalized_face(self, image: np.ndarray, face: Face) -> np.ndarray:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = image[face.y1 - 20:face.y2 + 20, face.x1 - 20:face.x2 + 20]
-        plt.imshow(image)
-        plt.show()
+        # image = image[face.y1 - 20:face.y2 + 20, face.x1 - 20:face.x2 + 20]
+        image = image[
+                int(face.bbox_center[1] - self.config.demo.face_max_height / 2):int(face.bbox_center[1] + self.config.demo.face_max_height / 2),
+                int(face.bbox_center[0] - self.config.demo.face_max_width / 2):int(face.bbox_center[0] + self.config.demo.face_max_width / 2)
+                ]
+        #plt.imshow(image)
+        #plt.show()
         return image
 
     def _draw_gaze_vector(self, face: Face) -> None:
@@ -245,9 +258,6 @@ class Demo:
         yv = ((yv + 0.5) * 2) - 1
         print(f'[gaze vector] ({xv:.2f}, {yv:.2f})')
 
-        # working for heatmap dimension 200x200
-        # x_projected = int((self.heatmap_width / 2) + xv * 100)
-        # y_projected = int((self.heatmap_height / 2) - yv * 100)
         x_projected = int(x + xv * x)
         y_projected = int(y - yv * y)
         print(f'[heatmap coordinates] ({x_projected}, {y_projected})')
