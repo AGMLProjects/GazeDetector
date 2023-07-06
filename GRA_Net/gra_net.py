@@ -4,7 +4,7 @@ from keras.regularizers import l2
 
 import tensorflow as tf
 import numpy as np
-import pathlib, socket, sys
+import pathlib, mlsocket, sys, json
 
 class ModelTrainer():
 	def __init__(self, dataset_path: str, batch_size: int, epochs: int, class_name: list, data_regex: str, n_classes: int):
@@ -25,10 +25,10 @@ class ModelTrainer():
 		self._class_name = class_name
 		self._data_regex = data_regex
 		self._n_classes = n_classes
-		self._image_size = 32
+		self._image_size = 64
 
-		self._retrival_connector = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
-		self._retrival_connector.connect(("localhost", 8080))
+		self._retrival_connector = mlsocket.MLSocket()
+		self._retrival_connector.connect(("127.0.0.1", 65432))
 
 	def _get_label(self, file_path):
 		if self._n_classes == 2:
@@ -56,7 +56,19 @@ class ModelTrainer():
 		return ds
 	
 	def _get_retrival(self, x, y):
-		self._retrival_connector.sendall(str.encode(" ".join([str(x), str(y)])))
+		self._retrival_connector.send(x.numpy())
+		metadata = self._retrival_connector.recv(1024)
+		metadata = json.loads(metadata.decode("utf-8"))
+
+		if "status" not in metadata:
+			raise KeyError("Missing status in the metadata")
+		else:
+			if metadata["status"] == True:
+				embedding = self._retrival_connector.recv(1024)
+			else:
+				embedding = None
+
+		return metadata, embedding
 	
 	def train_model(self):
 		# Load the dataset path
@@ -79,8 +91,11 @@ class ModelTrainer():
 		test_ds = list_ds.take(val_size)
 
 		# Define the preprocessing steps
-		resize_and_rescale = tf.keras.Sequential([
-			tf.keras.layers.Resizing(self._image_size, self._image_size),
+		resize = tf.keras.Sequential([
+			tf.keras.layers.Resizing(self._image_size, self._image_size)
+		])
+
+		rescale = tf.keras.Sequential([
 			tf.keras.layers.Rescaling(1. / 255)
 		])
 
@@ -95,10 +110,15 @@ class ModelTrainer():
 		train_ds = train_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
 		test_ds = test_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
 
+
+		# TODO: Fare il retrival ed integrare il risultato nel dataset (prima di rescale e augmentation) sia per il train che per il test
 		# Apply the preprocessing steps
-		train_ds = train_ds.map(lambda x, y: (resize_and_rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+		train_ds = train_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+		train_ds = train_ds.map(lambda x, y: (rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
 		train_ds = train_ds.concatenate(train_ds.map(lambda x, y: (data_augmentation(x, training = True), y), num_parallel_calls = tf.data.AUTOTUNE))
-		test_ds = test_ds.map(lambda x, y: (resize_and_rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+
+		test_ds = test_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+		test_ds = test_ds.map(lambda x, y: (rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
 
 		print("Train dataset size: " + str(len(train_ds)))
 		print("Test dataset size: " + str(len(test_ds)))
@@ -113,6 +133,7 @@ class ModelTrainer():
 		optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001, weight_decay = 0.0001, use_ema = True, ema_momentum = 0.9, clipnorm = 1.0)
 		loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False)
 		metrics = [tf.keras.metrics.SparseCategoricalAccuracy()]
+
 
 		# Compile the model
 		model.compile(
@@ -365,3 +386,39 @@ if __name__ == "__main__":
 
 		trainer.train_model()
 		sys.exit(0)
+	else:
+		camera_socket = mlsocket.MLSocket()
+		camera_socket.bind(("0.0.0.0", 12345))
+		camera_socket.listen()
+
+		retrival_connector = mlsocket.MLSocket()
+		retrival_connector.connect(("127.0.0.1", 65432))
+
+		print("Waiting for a connection...")
+
+		camera, address = camera_socket.accept()
+		print("Connection established with", address)
+
+		with camera:
+			while True:
+				data = camera.recv(1024)
+				if data == b"":
+					break
+
+				print(type(data))
+
+				retrival_connector.send(data)
+				metadata = retrival_connector.recv(1024)
+				metadata = json.loads(metadata.decode("utf-8"))
+
+				if "status" not in metadata:
+					raise KeyError("Missing status in the metadata")
+				else:
+					if metadata["status"] == True:
+						embedding = retrival_connector.recv(1024)
+					else:
+						embedding = None
+
+				print(metadata)
+				camera.send(json.dumps({"age": metadata["age"], "gender": metadata["gender"]}).encode("UTF-8"))
+

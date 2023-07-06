@@ -1,6 +1,7 @@
 from mlsocket import MLSocket
 import numpy as np
 from PIL import Image
+import json
 
 HOST = '127.0.0.1'
 PORT = 65432
@@ -11,9 +12,7 @@ data = np.array(image)
 with MLSocket() as s:
     s.connect((HOST, PORT))
     s.send(data)
-    gender = int(s.recv(1024))
-    age = int(s.recv(1024))
-    similarity = float(s.recv(1024))
+    return_dict = json.loads(s.recv(1024).decode('UTF-8'))
     embedding = s.recv(1024)
-    print(f"Most similar gender is {gender}, age is {age}, similarity is {similarity}, most similar "
-          f"embedding is {embedding}.")
+    print(f"Status {return_dict['status']}, most similar gender is {return_dict['gender']}, age is {return_dict['age']}, similarity is {return_dict['similarity']}, "
+          f"most similar embedding is {embedding}.")
