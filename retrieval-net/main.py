@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
                     try:
                         gender, age, similarity, embedding = retrievalComponent.get_most_similar_embedding(
-                            "data/output/embeddings.csv", data)
+                            "~/Resources/RetrievalEmbeddings/embeddings.csv", data)
                     except Exception as e:
                         print(f'Some exception occurred in finding most similar embedding. Error is: {e}')
                         return_dict = {'status': False}
