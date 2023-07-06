@@ -18,13 +18,8 @@ def train(epoch, model, optimizer, loss_function, train_loader, config):
     loss_meter = AverageMeter()
     angle_error_meter = AverageMeter()
 
-    # train_loader has 1181 examples inside
     for step, (images, poses, gazes) in enumerate(train_loader):
-        # extract from training set batch_size images (32), poses and gazes
-        # images are 448x448x3 channels
         images = images.to(device)
-        # we don't actually need poses
-        # poses = poses.to(device)
         # gazes are 2D gaze angle vectors
         gazes = gazes.to(device)
 
@@ -62,10 +57,6 @@ def validate(epoch, model, loss_function, val_loader, config):
 
     with torch.no_grad():
         for step, (images, poses, gazes) in enumerate(val_loader):
-            # extract from validation set batch_size images, poses and gazes
-            # image --> (1, 36, 60)
-            # pose  --> (2,)
-            # gaze  --> (2,)
             images = images.to(device)
             gazes = gazes.to(device)
 

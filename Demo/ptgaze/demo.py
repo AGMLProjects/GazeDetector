@@ -37,6 +37,8 @@ class Demo:
         self.heatmap_height = self.config.demo.heatmap_height
         self.heatmap = np.zeros((self.heatmap_width, self.heatmap_height))
 
+        self.connection = (self.config.demo.demographic_classifier_host, self.config.demo.demographic_classifier_port)
+
     def run(self) -> None:
         if self.config.demo.use_camera or self.config.demo.video_path:
             self._run_on_video()
@@ -86,7 +88,7 @@ class Demo:
 
         self.visualizer.set_image(image.copy())
         faces = self.gaze_estimator.detect_faces(undistorted)
-        gender, age = (-1, -1)
+        demographic_info = {'gender': -1, 'age': -1}
         for face in faces:
             self.gaze_estimator.estimate_gaze(undistorted, face)
             self._draw_face_bbox(face)
@@ -95,15 +97,14 @@ class Demo:
             self._draw_face_template_model(face)
             self._draw_gaze_vector(face)
             self._display_normalized_image(face)
+
             if self.config.demo.demographic_classifier:
                 face_frame = self._get_normalized_face(image, face)
                 # TODO: send face_frame to GraNet, receive gender and age
-                '''
                 with MLSocket() as socket:
-                    connection = (self.config.demo.demographic_classifier_host, self.config.demo.demographic_classifier_port)
-                    socket.connect(connection)
-                    response = socket.send(face_frame)
-                '''
+                    socket.connect(self.connection)
+                    socket.send(face_frame)
+                    response = socket.recv(1024)
                 gender, age = (1, 25)
                 if not self.config.demo.use_camera:
                     self._display_demographic_data(gender, age)
@@ -235,8 +236,8 @@ class Demo:
                 int(face.bbox_center[1] - self.config.demo.face_max_height / 2):int(face.bbox_center[1] + self.config.demo.face_max_height / 2),
                 int(face.bbox_center[0] - self.config.demo.face_max_width / 2):int(face.bbox_center[0] + self.config.demo.face_max_width / 2)
                 ]
-        #plt.imshow(image)
-        #plt.show()
+        plt.imshow(image)
+        plt.show()
         return image
 
     def _draw_gaze_vector(self, face: Face) -> None:

@@ -40,7 +40,7 @@ demo:
   heatmap_width: 640
   heatmap_height: 480
   demographic_classifier: true
-  demographic_classifier_host: 127.0.0.1
-  demographic_classifier_port: 4343
+  demographic_classifier_host: 192.168.0.117
+  demographic_classifier_port: 12345
   face_max_width: 300
   face_max_height: 400
