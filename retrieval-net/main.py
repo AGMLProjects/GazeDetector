@@ -1,5 +1,6 @@
 from RetrievalComponent import RetrievalComponent
 from mlsocket import MLSocket
+import json
 
 HOST = '127.0.0.1'
 PORT = 65432
@@ -21,13 +22,15 @@ if __name__ == '__main__':
 
             with conn:
                 data = conn.recv(1024)
-                print('Received: {}'.format(data))
-                gender, age, similarity, embedding = retrievalComponent.get_most_similar_embedding(
-                    "data/output/embeddings.csv", data)
 
-                print(f"Most similar gender is {gender}, age is {age}, similarity is {similarity}, most similar "
-                      f"embedding is {embedding}.")
-                conn.send(str(int(gender)).encode('utf-8'))
-                conn.send(str(int(age)).encode('utf-8'))
-                conn.send(str(float(similarity)).encode('utf-8'))
+                try:
+                    gender, age, similarity, embedding = retrievalComponent.get_most_similar_embedding(
+                        "data/output/embeddings.csv", data)
+                except Exception as e:
+                    print(f'Some exception occurred in finding most similar embedding. Error is: {e}')
+
+                print(f"Most similar gender is {gender}, age is {age}, similarity is {similarity}.")
+
+                return_dict = {'gender': int(gender), 'age': int(age), 'similarity': float(similarity)}
+                conn.send(json.dumps(return_dict).encode('UTF-8'))
                 conn.send(embedding)

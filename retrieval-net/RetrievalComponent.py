@@ -18,6 +18,7 @@ def collate_fn(batch):
 class RetrievalComponent:
 
     def __init__(self):
+        self.embeddings_df = None
         np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print('Running on device: {}'.format(self.device))
@@ -93,7 +94,7 @@ class RetrievalComponent:
 
     def get_most_similar_embedding(self, embedding_file, image):
 
-        embeddings_df = pd.read_csv(embedding_file)
+        embeddings_df = self.load_embeddings(embedding_file)
 
         embeddings = embeddings_df.iloc[:, :-2].values
 
@@ -120,13 +121,12 @@ class RetrievalComponent:
 
         max_similarity = similarities[0][most_similar_index]
 
-        print("Maximum similarity value:", max_similarity)
-        print("Index of the most similar value:", most_similar_index)
-
         most_similar_gender = df_gender[most_similar_index]
         most_similar_age = df_age[most_similar_index]
 
-        print('Most similar gender {}'.format(most_similar_gender))
-        print('Most similar age {}'.format(most_similar_age))
-
         return most_similar_gender, most_similar_age, max_similarity, new_embedding
+
+    def load_embeddings(self, embedding_file):
+        if self.embeddings_df is None:
+            self.embeddings_df = pd.read_csv(embedding_file)
+        return self.embeddings_df
