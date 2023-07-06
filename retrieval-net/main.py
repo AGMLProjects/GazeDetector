@@ -21,11 +21,19 @@ if __name__ == '__main__':
             conn, address = s.accept()
 
             with conn:
-                data = conn.recv(1024)
+                while True:
+                    data = conn.recv(1024)
+                    if data == b'':
+                        break
 
-                try:
-                    gender, age, similarity, embedding = retrievalComponent.get_most_similar_embedding(
-                        "data/output/embeddings.csv", data)
+                    try:
+                        gender, age, similarity, embedding = retrievalComponent.get_most_similar_embedding(
+                            "data/output/embeddings.csv", data)
+                    except Exception as e:
+                        print(f'Some exception occurred in finding most similar embedding. Error is: {e}')
+                        return_dict = {'status': False}
+                        conn.send(json.dumps(return_dict).encode('UTF-8'))
+                        continue
 
                     print(f"Most similar gender is {gender}, age is {age}, similarity is {similarity}.")
 
@@ -33,9 +41,5 @@ if __name__ == '__main__':
                                    'similarity': float(similarity)}
                     conn.send(json.dumps(return_dict).encode('UTF-8'))
                     conn.send(embedding)
-                except Exception as e:
-                    print(f'Some exception occurred in finding most similar embedding. Error is: {e}')
-                    return_dict = {'status': False}
-                    conn.send(json.dumps(return_dict).encode('UTF-8'))
 
 
