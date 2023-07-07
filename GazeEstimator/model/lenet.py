@@ -17,24 +17,20 @@ class LeNet(nn.Module):
         self.name = 'LeNet'
 
         self.feature_extractor = nn.Sequential(
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=5, stride=1, padding=0),
+            nn.Conv2d(in_channels=3, out_channels=6, kernel_size=5, stride=1, padding=0),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
-            nn.Conv2d(in_channels=32, out_channels=128, kernel_size=5, stride=1, padding=0),
+            nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5, stride=1, padding=0),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=4),
+            nn.MaxPool2d(kernel_size=2, stride=2),
 
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=5, stride=1, padding=0),
+            nn.Conv2d(in_channels=16, out_channels=120, kernel_size=5, stride=1, padding=0),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=4),
         )
 
-        # TODO: change name in 'regression'
-        self.classifier = nn.Sequential(
-            nn.Linear(256 * 5 * 5, 120),
+        self.regressor = nn.Sequential(
+            nn.Linear(120 * 105 * 105, 120),
             nn.ReLU(),
             nn.Linear(120, 84),
             nn.ReLU(),
@@ -44,5 +40,5 @@ class LeNet(nn.Module):
     def forward(self, x):
         x = self.feature_extractor(x)
         x = torch.flatten(x, 1)
-        x = self.classifier(x)
+        x = self.regressor(x)
         return x

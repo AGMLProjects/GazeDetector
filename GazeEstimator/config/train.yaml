@@ -5,11 +5,11 @@ model:
 dataset:
   dir: /homes/lventurelli/Resources/GazeEstimator/dataset
   name: dataset.h5
+  face_size: 448
 output:
   dir: /homes/lventurelli/Resources/GazeEstimator/outputs
 train:
   batch_size: 32
-  face_size: 448
   # can be: L1, L2, SmoothL1
   loss: L2
   weight_decay: 0.0001
