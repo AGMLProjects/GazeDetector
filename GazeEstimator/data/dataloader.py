@@ -47,7 +47,7 @@ def create_dataset(config: dict, is_train: bool) -> Any:
     dataset_path = dataset_dir / config['dataset']['name']
     subject_ids = [f'p{index:02}' for index in range(0, 15)]
 
-    transform = create_transform()
+    transform = create_transform(config)
 
     if is_train:
         test_subject_id = subject_ids[config['train']['test_id']]
@@ -67,23 +67,17 @@ def create_dataset(config: dict, is_train: bool) -> Any:
         return test_dataset
 
 
-def create_transform() -> Any:
+def create_transform(config: dict) -> Any:
     scale = torchvision.transforms.Lambda(lambda x: x.astype(np.float32) / 255)
     identity = torchvision.transforms.Lambda(lambda x: x)
-    size = 224
-    # This was a property
+    size = config['train']['face_size']
     if size != 448:
         resize = torchvision.transforms.Lambda(
             lambda x: cv2.resize(x, (size, size)))
     else:
         resize = identity
-    # This was a property
-    if False:
-        to_gray = torchvision.transforms.Lambda(lambda x: cv2.cvtColor(
-            cv2.equalizeHist(cv2.cvtColor(x, cv2.COLOR_BGR2GRAY)), cv2.
-            COLOR_GRAY2BGR))
-    else:
-        to_gray = identity
+
+    to_gray = identity
 
     transform = torchvision.transforms.Compose([
         resize,
