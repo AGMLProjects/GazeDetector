@@ -7,7 +7,7 @@ import tensorflow_datasets as tfds
 if __name__ == "__main__":
 
 	# Load the dataset path
-	data_directory = pathlib.Path("/home/lorenzo/GazeDetection/Dataset/Gender")
+	data_directory = pathlib.Path("/homes/lventurelli/Resources/Gender")
 	print("Dataset path: " + str(data_directory))
 
 	image_count = len(list(data_directory.glob("*.jpg")))
@@ -20,17 +20,19 @@ if __name__ == "__main__":
 	retrival_connector.connect(("127.0.0.1", 65432))
 
 	output = None
+	shape = (160, 160, 3)
 	i = 0
 	y = 0
 
 	for file_path in list_ds:
 
-		while i < 10001:
+		while i < 0:
 			i = i + 1
 			continue
 
 		try:
 			image = tf.io.decode_jpeg(tf.io.read_file(file_path), channels = 3)
+			image = tf.image.resize(image, [160, 160], antialias = True)
 			image = image.numpy()
 			label = [int(tf.strings.split(file_path, "_")[1]), int(int(tf.strings.split(file_path, "_")[2]) / 10) * 10]
 		except Exception as e:
@@ -47,23 +49,28 @@ if __name__ == "__main__":
 		else:
 			if metadata["status"] == True:
 				embedding = retrival_connector.recv(1024)
+				shape = embedding.shape
 				retrived_gender = int(metadata["gender"])
 				retrived_age = int(int(metadata["age"]) / 10) * 10
 				similarity = float(metadata["similarity"])
 			else:
 				embedding = tf.zeros(shape = (1), dtype = tf.uint8)
-				retrived_gender, retrived_age = -1, -1
+				retrived_gender, retrived_age = 0, 0
 				similarity = -1
 
-		row = [image, np.array(label, dtype = np.uint8), embedding, np.array([retrived_gender, retrived_age], dtype = np.uint8), np.array(similarity)]
+		if similarity != -1:
+			row = [image, np.array(label, dtype = np.uint8), embedding, np.array([retrived_gender, retrived_age], dtype = np.uint8), np.array(similarity)]
+		else:
+			i = i + 1
+			continue
 
 		if output is None:
-			output = np.array(row, dtype = object)
+			output = np.array((row,), dtype = object)
 		else:
-			output = np.append(output, np.array(row, dtype = object), axis = 0)
+			output = np.append(output, np.array((row,), dtype = object), axis = 0)
 
-		if i % 1000 == 0 and i != 0:
-			y = i / 1000
+		if i % 200 == 0 and i != 0:
+			y = int(i / 200)
 			np.savez_compressed(f"output{y}", output)
 			output = None
 			print(f"Saved output{y}.npy")

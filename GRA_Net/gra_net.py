@@ -27,8 +27,8 @@ class ModelTrainer():
 		self._n_classes = n_classes
 		self._image_size = 64
 
-		self._retrival_connector = mlsocket.MLSocket()
-		self._retrival_connector.connect(("127.0.0.1", 65432))
+		#self._retrival_connector = mlsocket.MLSocket()
+		#self._retrival_connector.connect(("127.0.0.1", 65432))
 
 	def _get_label(self, file_path):
 		if self._n_classes == 2:
@@ -71,7 +71,7 @@ class ModelTrainer():
 		return metadata, embedding
 	
 	def train_model(self):
-		# Load the dataset path
+		'''# Load the dataset path
 		data_directory = pathlib.Path(self._dataset_path)
 		print("Dataset path: " + str(data_directory))
 
@@ -83,9 +83,21 @@ class ModelTrainer():
 		list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration = False)
 		options = tf.data.Options()
 		options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-		list_ds = list_ds.with_options(options)
+		list_ds = list_ds.with_options(options)'''
+
+		with np.load(self._dataset_path + "dataset.npz", mmap_mode = "r", allow_pickle = True) as data:
+			dataset = data["arr_0"]
+			x, y, x_ret, y_ret, sim = dataset.T
+			x = np.stack(x)
+			x_ret = np.stack(x_ret)
+			sim = np.stack(sim)
+			y = np.stack(y)
+			y_ret = np.stack(y_ret)
+			list_ds = tf.data.Dataset.from_tensor_slices(({"img": x, "ret_img": x_ret, "ret_label": y_ret[:, 0], "sim": sim}, y[:, 0]))
+			
 
 		# Split the dataset into training and test
+		image_count = len(list_ds)
 		val_size = int(image_count * 0.2)
 		train_ds = list_ds.skip(val_size)
 		test_ds = list_ds.take(val_size)
@@ -107,18 +119,18 @@ class ModelTrainer():
 		])
 
 		# Decode the dataset and retrive the labels
-		train_ds = train_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
-		test_ds = test_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
+		#train_ds = train_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
+		#test_ds = test_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
 
 
 		# TODO: Fare il retrival ed integrare il risultato nel dataset (prima di rescale e augmentation) sia per il train che per il test
 		# Apply the preprocessing steps
-		train_ds = train_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
-		train_ds = train_ds.map(lambda x, y: (rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
-		train_ds = train_ds.concatenate(train_ds.map(lambda x, y: (data_augmentation(x, training = True), y), num_parallel_calls = tf.data.AUTOTUNE))
+		#train_ds = train_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+		train_ds = train_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_label": x["ret_img"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
+		train_ds = train_ds.concatenate(train_ds.map(lambda x, y: ({"img": data_augmentation(x["img"], training = True), "ret_img": x["ret_img"], "ret_label": x["ret_img"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE))
 
-		test_ds = test_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
-		test_ds = test_ds.map(lambda x, y: (rescale(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+		#test_ds = test_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
+		test_ds = test_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_label": x["ret_img"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
 
 		print("Train dataset size: " + str(len(train_ds)))
 		print("Test dataset size: " + str(len(test_ds)))
@@ -139,7 +151,8 @@ class ModelTrainer():
 		model.compile(
 			optimizer = optimizer,
 			loss = loss,
-			metrics = metrics
+			metrics = metrics,
+			run_eagerly=True
 		)
 
 
@@ -310,7 +323,10 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	regularizer = l2(regularization)
 
 	# Perform preliminar normalization, reshaping and pooling before feeding the attention network
-	input_ = Input(shape = shape)
+	input_ = Input(shape = (160, 160, 3), name = "img")
+	sim = Input(shape = (1,), name = "sim")
+	x_ret = Input(shape = (1, 512), name = "ret_img")
+	y_ret = Input(shape = (1,), name = "ret_label")
 	x = Conv2D(n_channels, (7, 7), strides = (2, 2), padding = "same")(input_)
 	x = BatchNormalization()(x)
 	x = Activation("relu")(x)
@@ -345,8 +361,6 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 
 	model = Model(input_, output)
 	return model
-
-
 
 if __name__ == "__main__":
 
