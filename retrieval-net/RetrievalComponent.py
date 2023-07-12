@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 from facenet_pytorch import InceptionResnetV1
 from facenet_pytorch.models.mtcnn import MTCNN
+from sklearn.metrics import precision_score, recall_score
 from sklearn.metrics.pairwise import cosine_similarity
 from torch.utils.data import DataLoader
 
@@ -22,12 +23,67 @@ class RetrievalComponent:
         np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print('Running on device: {}'.format(self.device))
+        self.workers = 0 if os.name == 'nt' else 2
+        print('Workers: {}'.format(self.workers))
+
+    def evaluate(self, dataset_folder, train_percentage, batch_size, embedding_file):
+        print('Starting evaluation')
+
+        dataset = CustomDataset(dataset_folder)
+        train_size = int(train_percentage * len(dataset))
+        test_size = len(dataset) - train_size
+        train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+        loader = DataLoader(train_dataset, collate_fn=collate_fn, num_workers=self.workers, batch_size=batch_size)
+
+        aligned, target_variables = self.get_face_detection_aligned_and_target(train_size, loader, batch_size)
+
+        self.perform_face_recognition(aligned, target_variables, batch_size, embedding_file)
+
+        ground_truth_gender = []
+        ground_truth_age = []
+        predicted_gender = []
+        predicted_age = []
+
+        evaluated = 0
+        for image_path, image, targets in test_dataset:
+            try:
+                gender, age, similarity, _ = self.get_most_similar_embedding(embedding_file, image)
+            except Exception:
+                continue
+
+            ground_truth_gender.append(targets[0])
+            ground_truth_age.append(targets[1])
+            predicted_gender.append(gender)
+            predicted_age.append(age)
+
+            evaluated += 1
+            if evaluated % batch_size == 0:
+                print(f'Evaluated: {evaluated} examples')
+
+        precision_gender = precision_score(ground_truth_gender, predicted_gender, average='micro')
+        recall_gender = recall_score(ground_truth_gender, predicted_gender, average='micro')
+        precision_age = precision_score(ground_truth_age, predicted_age, average='micro')
+        recall_age = recall_score(ground_truth_age, predicted_age, average='micro')
+        mae = np.mean(np.abs(np.array(ground_truth_age) - np.array(predicted_age)))
+
+        print(f'Evaluated: {evaluated} examples')
+        print(f"Gender precision: {precision_gender}, recall: {recall_gender}.")
+        print(f"Age precision: {precision_age}, recall: {recall_age}, mean absolute error: {mae}")
+        return precision_gender, recall_gender, precision_age, recall_age, mae
 
     def perform_face_detection(self, dataset_folder, batch_size):
         print("Starting face detection.")
 
-        workers = 0 if os.name == 'nt' else 2
+        dataset = CustomDataset(dataset_folder)
+        loader = DataLoader(dataset, collate_fn=collate_fn, num_workers=self.workers, batch_size=batch_size)
 
+        aligned, target_variables = self.get_face_detection_aligned_and_target(len(dataset.image_paths), loader,
+                                                                               batch_size)
+
+        print("Face detection ended.")
+        return aligned, target_variables
+
+    def get_face_detection_aligned_and_target(self, total_number_of_images, loader, batch_size):
         # MTCNN (Multi-task Cascaded Convolutional Networks) -> face detection
         mtcnn = MTCNN(
             image_size=160, margin=0, min_face_size=20,
@@ -35,13 +91,11 @@ class RetrievalComponent:
             device=self.device
         )
 
-        dataset = CustomDataset(dataset_folder)
-        loader = DataLoader(dataset, collate_fn=collate_fn, num_workers=workers, batch_size=batch_size)
-
         aligned = []
         target_variables = []
         total_batches = len(loader)
-        print("Total number of images: {}, using batch size: {}, total number of batches: {}".format(len(dataset.image_paths), batch_size, total_batches))
+        print("Total number of images: {}, using batch size: {}, total number of batches: {}".format(
+            total_number_of_images, batch_size, total_batches))
         elaborated_requests = 0
         for batch in loader:
             paths, xs, ys = zip(*batch)
@@ -53,10 +107,8 @@ class RetrievalComponent:
                     aligned.append(x_aligned)
                     target_variables.append(y)
                 elaborated_requests += 1
-                if elaborated_requests % batch_size == 0 or elaborated_requests == len(dataset.image_paths):
-                    print(f"Detected {elaborated_requests} faces out of {len(dataset.image_paths)} total faces.")
-
-        print("Face detection ended.")
+                if elaborated_requests % batch_size == 0 or elaborated_requests == total_number_of_images:
+                    print(f"Detected {elaborated_requests} faces out of {total_number_of_images} total faces.")
         return aligned, target_variables
 
     def perform_face_recognition(self, aligned, target_variables, batch_size, embedding_file):
