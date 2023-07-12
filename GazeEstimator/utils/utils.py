@@ -29,12 +29,18 @@ def setup_cudnn() -> None:
     torch.backends.cudnn.deterministic = False
 
 
+# pitch --> rotation over ax Y
+# yaw   --> rotation over ax X
+# The rotation matrix used is the following:
+# x = cos(yaw)*cos(pitch)
+# y = sin(yaw)*cos(pitch)
+# z = sin(pitch)
 def convert_to_unit_vector(angles: torch.Tensor):
     pitches = angles[:, 0]
     yaws = angles[:, 1]
-    x = -torch.cos(pitches) * torch.sin(yaws)
-    y = -torch.sin(pitches)
-    z = -torch.cos(pitches) * torch.cos(yaws)
+    x = - (torch.cos(yaws) * torch.cos(pitches))
+    y = - (torch.sin(yaws) * torch.cos(pitches))
+    z = - (torch.sin(pitches))
     norm = torch.sqrt(x**2 + y**2 + z**2)
     x /= norm
     y /= norm

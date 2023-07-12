@@ -1,13 +1,15 @@
 name: gaze
 device: auto
 model:
-  name: alexnet
+  name: resnet
 dataset:
   dir: /homes/lventurelli/Resources/GazeEstimator/dataset
+  # dir: C:\uni\cv\GazeDetectionProject\GazeEstimator\dataset
   name: dataset.h5
-  face_size: 448
+  face_size: 224
 output:
   dir: /homes/lventurelli/Resources/GazeEstimator/outputs
+  # dir: C:\uni\cv\GazeDetectionProject\GazeEstimator\outputs
 train:
   batch_size: 32
   # can be: L1, L2, SmoothL1
