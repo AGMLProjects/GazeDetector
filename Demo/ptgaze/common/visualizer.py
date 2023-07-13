@@ -38,7 +38,9 @@ class Visualizer:
         color = (0, 173, 3)
         thickness = 1
         cv2.putText(self.image, text, org, font, fontScale, color, thickness, cv2.LINE_AA)
-        text = f'Age: {age}'
+        age = int(age / 10)
+        age = int(age * 10)
+        text = f'Age range: {age}-{age + 10}'
         org = (10, 55)
         cv2.putText(self.image, text, org, font, fontScale, color, thickness, cv2.LINE_AA)
 
