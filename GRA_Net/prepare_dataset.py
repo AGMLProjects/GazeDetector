@@ -7,7 +7,7 @@ import tensorflow_datasets as tfds
 if __name__ == "__main__":
 
 	# Load the dataset path
-	data_directory = pathlib.Path("/homes/lventurelli/Resources/Gender")
+	data_directory = pathlib.Path("/home/lorenzo/GazeDetection/Dataset/Gender")
 	print("Dataset path: " + str(data_directory))
 
 	image_count = len(list(data_directory.glob("*.jpg")))
@@ -76,5 +76,3 @@ if __name__ == "__main__":
 			print(f"Saved output{y}.npy")
 		
 		i= i + 1
-
-	

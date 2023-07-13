@@ -1,4 +1,4 @@
-from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Input, Dense, Flatten, Lambda
+from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Input, Dense, Flatten, Lambda, Concatenate
 from keras.models import Model
 from keras.regularizers import l2
 
@@ -193,6 +193,26 @@ class GatedLayer(Layer):
 	def compute_output_shape(self, input_shape):
 		return input_shape[0]
 	
+class PredictionInterpolatorLayer(Layer):
+	def __init__(self, **kwargs):
+		super(GatedLayer, self).__init__(**kwargs)
+
+	def build(self, input_shape):
+		# Create trainable weights for this layer
+		self._actual_y = self.add_weight(name = 'actual_y', shape = (1,), initializer = 'uniform', trainable = True)
+		self._retrived_y = self.add_weight(name = 'retrived_y', shape = (1,), initializer = 'uniform', trainable = True)
+
+		super(GatedLayer, self).build(input_shape)
+
+	def call(self, y_actual, y_retrived):
+		return Lambda(lambda x: x / 2)(Add()([
+			Lambda(lambda x: x / self._actual_y)(y_actual),
+			Lambda(lambda x: x / self._retrived_y)(y_retrived)
+		]))
+	
+	def compute_output_shape(self, input_shape):
+		return input_shape[0]
+	
 # Define the residual block
 def residual_block(input, input_channels = None, output_channels = None, kernel_size = (3, 3), stride = 1):
 
@@ -324,9 +344,9 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 
 	# Perform preliminar normalization, reshaping and pooling before feeding the attention network
 	input_ = Input(shape = (160, 160, 3), name = "img")
-	sim = Input(shape = (1,), name = "sim")
-	x_ret = Input(shape = (1, 512), name = "ret_img")
-	y_ret = Input(shape = (1,), name = "ret_label")
+	sim_ = Input(shape = (1,), name = "sim")
+	x_ret_ = Input(shape = (1, 512), name = "ret_img")
+	y_ret_ = Input(shape = (1,), name = "ret_label")
 	x = Conv2D(n_channels, (7, 7), strides = (2, 2), padding = "same")(input_)
 	x = BatchNormalization()(x)
 	x = Activation("relu")(x)
@@ -350,16 +370,26 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	pool_size = (x.get_shape()[1], x.get_shape()[2])
 	x = AveragePooling2D(pool_size=pool_size, strides=(1, 1))(x)
 	x = Flatten()(x)
+	
+	# Depending on the similarity, use or not the retrived data
+	if sim_ > 0.5:
+		# If the similarity is above the threshold, use the retrived embedding but dropping out depending on the similarity (confidence)
+		x_ret = Dropout(1 - sim_)(x_ret_)
+
+		# Concatenate the embedding with the input
+		x = Concatenate()([x, x_ret])
+
+	# Consider the dropout on the entire feature vector if specified
 	if dropout:
 		x = Dropout(dropout)(x)
 	
-	x = Dense(n_channels * 32, kernel_regularizer = regularizer, activation = "relu")(x)
+	# Calculate the prediction of this model
+	y = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(x)
+	output = PredictionInterpolatorLayer()(y, y_ret_)
 
-	if dropout:
-		x = Dropout(dropout)(x)
-	output = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(x)
-
-	model = Model(input_, output)
+	output = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(output)
+	
+	model = Model({"img": input_, "sim": sim_, "ret_img": x_ret_, "ret_label": y_ret_}, output)
 	return model
 
 if __name__ == "__main__":
