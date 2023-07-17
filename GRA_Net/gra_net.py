@@ -177,6 +177,7 @@ class ModelTrainer():
 		# Train the model
 		model.fit(
 			train_ds,
+			steps_per_epoch = train_size,
 			validation_data = test_ds,
 			shuffle = True,
 			epochs = EPOCHS
@@ -439,7 +440,7 @@ if __name__ == "__main__":
 
 	# Define the constants
 	DATASET_PATH = "./Gender/"
-	BATCH_SIZE = 32
+	BATCH_SIZE = 64
 	EPOCHS = 20
 	CLASS_NAME = ["female", "male"]
 	DATA_REGEX = r"([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)\.jpg"
