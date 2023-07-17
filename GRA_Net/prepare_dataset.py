@@ -6,8 +6,10 @@ import tensorflow_datasets as tfds
 
 if __name__ == "__main__":
 
+	BATCH_SIZE = 64
+
 	# Load the dataset path
-	data_directory = pathlib.Path("/home/lorenzo/GazeDetection/Dataset/Gender")
+	data_directory = pathlib.Path("/home/lorenzo/Dataset")
 	print("Dataset path: " + str(data_directory))
 
 	image_count = len(list(data_directory.glob("*.jpg")))
@@ -17,16 +19,31 @@ if __name__ == "__main__":
 	list_ds = tf.data.Dataset.list_files(str(data_directory/"*.jpg"), shuffle = False)
 
 	retrival_connector = mlsocket.MLSocket()
-	retrival_connector.connect(("127.0.0.1", 65432))
+	#retrival_connector.connect(("127.0.0.1", 65431))
 
-	output = None
+	if pathlib.Path("Dataset/images.npy").exists():
+		t = np.memmap("Dataset/images.npy", dtype = "float32", mode = "r")
+		skip_images = int(t.shape[0] / (160*160*3))
+		completed_steps = int(skip_images / 64)
+		del t
+	else:
+		skip_images = 0
+		completed_steps = 0
+
+	print(f"Skipping the first {skip_images} images. Starting from batch {completed_steps}/{int(image_count / BATCH_SIZE)}")
+
+	x, x_ret, g, a, g_ret, a_ret, s = None, None, None, None, None, None, None
+	x_shape, x_ret_shape, g_shape, a_shape, g_ret_shape, a_ret_shape, s_hape = (160, 160, 3), (1, 512), (1,), (1,), (1,), (1,), (1,)
 	shape = (160, 160, 3)
-	i = 0
+	i = 1
 	y = 0
 
 	for file_path in list_ds:
 
-		while i < 0:
+		if i <= skip_images:
+			if i == skip_images:
+				y = completed_steps
+
 			i = i + 1
 			continue
 
@@ -34,7 +51,8 @@ if __name__ == "__main__":
 			image = tf.io.decode_jpeg(tf.io.read_file(file_path), channels = 3)
 			image = tf.image.resize(image, [160, 160], antialias = True)
 			image = image.numpy()
-			label = [int(tf.strings.split(file_path, "_")[1]), int(int(tf.strings.split(file_path, "_")[2]) / 10) * 10]
+			filename = tf.strings.split(file_path, "/")[-1]
+			label = [int(tf.strings.split(filename, "_")[1]), int(int(tf.strings.split(filename, "_")[0]) / 10) * 10]
 		except Exception as e:
 			print(e)
 			continue
@@ -54,25 +72,101 @@ if __name__ == "__main__":
 				retrived_age = int(int(metadata["age"]) / 10) * 10
 				similarity = float(metadata["similarity"])
 			else:
-				embedding = tf.zeros(shape = (1), dtype = tf.uint8)
-				retrived_gender, retrived_age = 0, 0
-				similarity = -1
+				continue
 
-		if similarity != -1:
-			row = [image, np.array(label, dtype = np.uint8), embedding, np.array([retrived_gender, retrived_age], dtype = np.uint8), np.array(similarity)]
+		if x is None:
+			x = np.array((image,), dtype = np.float32)
+			x_ret = np.array((embedding,), dtype = np.float32)
+			g = np.array((label[0],), dtype = np.uint8)
+			a = np.array((label[1],), dtype = np.uint8)
+			g_ret = np.array((retrived_gender,), dtype = np.uint8)
+			a_ret = np.array((retrived_age,), dtype = np.uint8)
+			s = np.array((similarity,), dtype = np.float64)
 		else:
-			i = i + 1
-			continue
+			x = np.append(x, np.array((image,), dtype = np.float32), axis = 0)
+			x_ret = np.append(x_ret, np.array((embedding,), dtype = np.float32), axis = 0)
+			g = np.append(g, np.array((label[0],), dtype = np.uint8), axis = 0)
+			a = np.append(a, np.array((label[1],), dtype = np.uint8), axis = 0)
+			g_ret = np.append(g_ret, np.array((retrived_gender,), dtype = np.uint8), axis = 0)
+			a_ret = np.append(a_ret, np.array((retrived_age,), dtype = np.uint8), axis = 0)
+			s = np.append(s, np.array((similarity,), dtype = np.float64), axis = 0)
 
-		if output is None:
-			output = np.array((row,), dtype = object)
-		else:
-			output = np.append(output, np.array((row,), dtype = object), axis = 0)
+		if i % BATCH_SIZE == 0 and i != 0:
+			if y == 0:
+				f = np.memmap("images.npy", dtype = "float32", mode = "w+", shape = (i, x_shape[0], x_shape[1], x_shape[2]))
+				f[:, :, :, :] = x[:, :, :, :]
+				f.flush()
+				del f
 
-		if i % 200 == 0 and i != 0:
-			y = int(i / 200)
-			np.savez_compressed(f"output{y}", output)
-			output = None
-			print(f"Saved output{y}.npy")
+				f = np.memmap("embeddings.npy", dtype = "float32", mode = "w+", shape = (i, x_ret_shape[0], x_ret_shape[1]))
+				f[:, :, :] = x_ret[:, :, :]
+				f.flush()
+				del f
+
+				f = np.memmap("gender.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f[:] = g[:]
+				f.flush()
+				del f
+
+				f = np.memmap("age.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f[:] = a[:]
+				f.flush()
+				del f
+
+				f = np.memmap("retrived_gender.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f[:] = g_ret[:]
+				f.flush()
+				del f
+
+				f = np.memmap("retrived_age.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f[:] = a_ret[:]
+				f.flush()
+				del f
+
+				f = np.memmap("similarity.npy", dtype = "float64", mode = "w+", shape = (i,))
+				f[:] = s[:]
+				f.flush()
+				del f
+
+			else:
+				f = np.memmap("images.npy", dtype = "float32", mode = "r+", shape = (i, x_shape[0], x_shape[1], x_shape[2]))
+				f[i - BATCH_SIZE:, :, :, :] = x
+				f.flush()
+				del f
+
+				f = np.memmap("embeddings.npy", dtype = "float32", mode = "r+", shape = (i, x_ret_shape[0], x_ret_shape[1]))
+				f[i - BATCH_SIZE:, :, :] = x_ret
+				f.flush()
+				del f
+
+				f = np.memmap("gender.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f[i - BATCH_SIZE:] = g
+				f.flush()
+				del f
+
+				f = np.memmap("age.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f[i - BATCH_SIZE:] = a
+				f.flush()
+				del f
+
+				f = np.memmap("retrived_gender.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f[i - BATCH_SIZE:] = g_ret
+				f.flush()
+				del f
+
+				f = np.memmap("retrived_age.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f[i - BATCH_SIZE:] = a_ret
+				f.flush()
+				del f
+
+				f = np.memmap("similarity.npy", dtype = "float64", mode = "r+", shape = (i,))
+				f[i - BATCH_SIZE:] = s
+				f.flush()
+				del f
+			
+			x, x_ret, g, a, g_ret, a_ret, s = None, None, None, None, None, None, None
+			y = int(i / BATCH_SIZE)
+			print(f"Calculated batch {y}/{int(image_count / BATCH_SIZE)}")
+			
 		
 		i= i + 1

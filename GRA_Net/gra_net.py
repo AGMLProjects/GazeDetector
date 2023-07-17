@@ -1,10 +1,79 @@
-from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Input, Dense, Flatten, Lambda, Concatenate
+from keras.layers import AveragePooling2D, Layer, Dropout, BatchNormalization, Conv2D, UpSampling2D, Activation, MaxPooling2D, Add, Multiply, Input, Dense, Flatten, Lambda
 from keras.models import Model
 from keras.regularizers import l2
 
 import tensorflow as tf
 import numpy as np
-import pathlib, mlsocket, sys, json
+import pathlib, mlsocket, sys, json, zipfile
+
+class NumpyGenerator(tf.keras.utils.Sequence):
+
+	def __init__(self, path: str, batch_size: int = 64, image_shape: tuple = (160, 160, 3)):
+		self._path = path
+		self._batch_size = batch_size
+		self._image_shape = image_shape
+
+		self._image_file = self._path + "/images.npy"
+		self._embedding_file = self._path + "/embeddings.npy"
+		self._similarity_file = self._path + "/similarity.npy"
+		self._gender_file = self._path + "/gender.npy"
+		self._age_file = self._path + "/age.npy"
+		self._ret_gender_file = self._path + "/retrived_gender.npy"
+		self._ret_age_file = self._path + "/retrived_age.npy"
+
+		self._opened = False
+
+		self._f_im, self._f_em, self._f_sim, self._f_g, self._f_a, self._f_rg, self._f_ra = None, None, None, None, None, None, None
+
+	def __len__(self) -> int:
+		t = np.memmap(self._image_file, dtype = "float32", mode = "r")
+		i = int(t.shape[0] / int(self._image_shape[0] * self._image_shape[1] * self._image_shape[2] * self._batch_size))
+		del t
+		return i
+		
+	def __getitem__(self, idx):
+		self._open_files()
+
+		x = self._f_im[idx * self._batch_size:(idx + 1) * self._batch_size]
+		x_ret = self._f_em[idx * self._batch_size:(idx + 1) * self._batch_size]
+		sim = self._f_sim[idx * self._batch_size:(idx + 1) * self._batch_size]
+		g = self._f_g[idx * self._batch_size:(idx + 1) * self._batch_size]
+		a = self._f_a[idx * self._batch_size:(idx + 1) * self._batch_size] / 10
+		g_ret = self._f_rg[idx * self._batch_size:(idx + 1) * self._batch_size]
+		a_ret = self._f_ra[idx * self._batch_size:(idx + 1) * self._batch_size] / 10
+
+		return (
+			{
+				"img": tf.convert_to_tensor(x),
+				"ret_img": tf.convert_to_tensor(x_ret),
+				"ret_age": tf.convert_to_tensor(g_ret),
+				"ret_gender": tf.convert_to_tensor(a_ret),
+				"sim": tf.convert_to_tensor(sim)
+			},
+			{
+				"gender": tf.convert_to_tensor(g),
+				"age": tf.convert_to_tensor(a)
+			}
+		)
+	
+	def on_epoch_end(self):
+		pass
+		
+	def _open_files(self) -> None:
+		if not self._opened:
+			t = np.memmap(self._image_file, dtype = "float32", mode = "r")
+			file_len = int(t.shape[0] / int(self._image_shape[0] * self._image_shape[1] * self._image_shape[2]))
+			del t
+			
+			self._f_im = np.memmap(self._image_file, dtype = "float32", mode = "r", shape = (file_len, self._image_shape[0], self._image_shape[1], self._image_shape[2]))
+			self._f_em = np.memmap(self._embedding_file, dtype = "float32", mode = "r", shape = (file_len, 1, 512))
+			self._f_sim = np.memmap(self._similarity_file, dtype = "float64", mode = "r", shape = (file_len, 1))
+			self._f_g = np.memmap(self._gender_file, dtype = "uint8", mode = "r", shape = (file_len, 1))
+			self._f_a = np.memmap(self._age_file, dtype = "uint8", mode = "r", shape = (file_len, 1))
+			self._f_rg = np.memmap(self._ret_gender_file, dtype = "uint8", mode = "r", shape = (file_len, 1))
+			self._f_ra = np.memmap(self._ret_age_file, dtype = "uint8", mode = "r", shape = (file_len, 1))
+
+			self._opened = True
 
 class ModelTrainer():
 	def __init__(self, dataset_path: str, batch_size: int, epochs: int, class_name: list, data_regex: str, n_classes: int):
@@ -27,86 +96,44 @@ class ModelTrainer():
 		self._n_classes = n_classes
 		self._image_size = 64
 
-		#self._retrival_connector = mlsocket.MLSocket()
-		#self._retrival_connector.connect(("127.0.0.1", 65432))
-
-	def _get_label(self, file_path):
-		if self._n_classes == 2:
-			return int(tf.strings.split(file_path, "_")[1])
-		else:
-			return int(int(tf.strings.split(file_path, "_")[2]) / 10) * 10
-
-	def _decode_image(self, img):
-		return tf.io.decode_jpeg(img, channels = 3)
-
-	def _process_path(self, file_path):
-		label = self._get_label(file_path = file_path)
-
-		img = tf.io.read_file(file_path)
-		img = self._decode_image(img = img)
-		
-		return img, label
-
 	def _configure_dataset(self, ds):
 		ds = ds.cache()
-		ds = ds.shuffle(buffer_size = 1000)
-		ds = ds.batch(32)
+		#ds = ds.shuffle(buffer_size = 1000)
+		#ds = ds.batch(32)
 		ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
 
 		return ds
 	
-	def _get_retrival(self, x, y):
-		self._retrival_connector.send(x.numpy())
-		metadata = self._retrival_connector.recv(1024)
-		metadata = json.loads(metadata.decode("utf-8"))
+	def _numpy_generator(self, iterator: NumpyGenerator):
+		for element in iterator:
+			yield element
 
-		if "status" not in metadata:
-			raise KeyError("Missing status in the metadata")
-		else:
-			if metadata["status"] == True:
-				embedding = self._retrival_connector.recv(1024)
-			else:
-				embedding = None
+	def train_model(self):		
+		dataset_generator = NumpyGenerator(path = self._dataset_path, batch_size = self._batch_size)
 
-		return metadata, embedding
-	
-	def train_model(self):
-		'''# Load the dataset path
-		data_directory = pathlib.Path(self._dataset_path)
-		print("Dataset path: " + str(data_directory))
+		dataset = tf.data.Dataset.from_generator(
+			lambda: self._numpy_generator(dataset_generator), 
+			output_signature = (
+				{
+					"img": tf.TensorSpec(shape = (self._batch_size, 160, 160, 3), dtype = tf.float32),
+					"ret_img": tf.TensorSpec(shape = (self._batch_size, 1, 512), dtype = tf.float32),
+					"ret_gender": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
+					"ret_age": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
+					"sim": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.float64)
+				},
+				{
+					"gender": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
+					"age": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
+				}
+			)
+		)
 
-		image_count = len(list(data_directory.glob("*.jpg")))
-		print("Dataset size: " + str(image_count))
+		# Split the dataset in train and test
+		train_size = int(0.8 * dataset_generator.__len__())
+		train_ds = dataset.take(train_size)
+		test_ds = dataset.skip(train_size)
 
-		# Load the dataset
-		list_ds = tf.data.Dataset.list_files(str(data_directory/"*.jpg"), shuffle = False)
-		list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration = False)
-		options = tf.data.Options()
-		options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-		list_ds = list_ds.with_options(options)'''
-
-		with np.load(self._dataset_path + "dataset.npz", mmap_mode = "r", allow_pickle = True) as data:
-			dataset = data["arr_0"]
-			x, y, x_ret, y_ret, sim = dataset.T
-			x = np.stack(x)
-			x_ret = np.stack(x_ret)
-			sim = np.stack(sim)
-			y = np.stack(y)
-			y_ret = np.stack(y_ret)
-			list_ds = tf.data.Dataset.from_tensor_slices(({"img": x, "ret_img": x_ret, "ret_label": y_ret[:, 0], "sim": sim}, y[:, 0]))
-			
-
-		# Split the dataset into training and test
-		image_count = len(list_ds)
-		val_size = int(image_count * 0.2)
-		train_ds = list_ds.skip(val_size)
-		test_ds = list_ds.take(val_size)
-
-		# Define the preprocessing steps
-		resize = tf.keras.Sequential([
-			tf.keras.layers.Resizing(self._image_size, self._image_size)
-		])
-
+		# Preprocessing steps
 		rescale = tf.keras.Sequential([
 			tf.keras.layers.Rescaling(1. / 255)
 		])
@@ -115,25 +142,15 @@ class ModelTrainer():
 			tf.keras.layers.RandomFlip("horizontal_and_vertical"),
 			tf.keras.layers.RandomRotation(0.2),
 			tf.keras.layers.RandomZoom(0.2),
-			tf.keras.layers.RandomContrast(0.2)
+			tf.keras.layers.RandomContrast(0.2),
+			tf.keras.layers.RandomBrightness(0.2)
 		])
 
-		# Decode the dataset and retrive the labels
-		#train_ds = train_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
-		#test_ds = test_ds.map(self._process_path, num_parallel_calls = tf.data.AUTOTUNE)
+		train_ds = train_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_gender": x["ret_gender"], "ret_age": x["ret_age"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
+		train_ds = train_ds.concatenate(train_ds.map(lambda x, y: ({"img": data_augmentation(x["img"], training = True), "ret_img": x["ret_img"], "ret_gender": x["ret_gender"], "ret_age": x["ret_age"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE))
 
+		test_ds = test_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_gender": x["ret_gender"], "ret_age": x["ret_age"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
 
-		# TODO: Fare il retrival ed integrare il risultato nel dataset (prima di rescale e augmentation) sia per il train che per il test
-		# Apply the preprocessing steps
-		#train_ds = train_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
-		train_ds = train_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_label": x["ret_img"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
-		train_ds = train_ds.concatenate(train_ds.map(lambda x, y: ({"img": data_augmentation(x["img"], training = True), "ret_img": x["ret_img"], "ret_label": x["ret_img"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE))
-
-		#test_ds = test_ds.map(lambda x, y: (resize(x), y), num_parallel_calls = tf.data.AUTOTUNE)
-		test_ds = test_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_label": x["ret_img"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
-
-		print("Train dataset size: " + str(len(train_ds)))
-		print("Test dataset size: " + str(len(test_ds)))
 
 		# Optimize the dataset
 		train_ds = self._configure_dataset(train_ds)
@@ -143,16 +160,15 @@ class ModelTrainer():
 		model = GenderNetwork(shape = (self._image_size, self._image_size, 3), n_channels = 64, n_classes = self._n_classes, dropout = 0.1, regularization = 0.01)
 
 		optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001, weight_decay = 0.0001, use_ema = True, ema_momentum = 0.9, clipnorm = 1.0)
-		loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False)
-		metrics = [tf.keras.metrics.SparseCategoricalAccuracy()]
-
+		loss = {"gender": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False), "age": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False)}
+		metrics = {"gender": tf.keras.metrics.SparseCategoricalAccuracy(), "age": tf.keras.metrics.SparseCategoricalAccuracy()}
 
 		# Compile the model
 		model.compile(
 			optimizer = optimizer,
 			loss = loss,
 			metrics = metrics,
-			run_eagerly=True
+			run_eagerly = True
 		)
 
 
@@ -162,6 +178,7 @@ class ModelTrainer():
 		model.fit(
 			train_ds,
 			validation_data = test_ds,
+			shuffle = True,
 			epochs = EPOCHS
 		)
 
@@ -192,27 +209,31 @@ class GatedLayer(Layer):
 	
 	def compute_output_shape(self, input_shape):
 		return input_shape[0]
-	
-class PredictionInterpolatorLayer(Layer):
+
+class CombinationGate(Layer):
 	def __init__(self, **kwargs):
-		super(GatedLayer, self).__init__(**kwargs)
+		super(CombinationGate, self).__init__(**kwargs)
 
 	def build(self, input_shape):
 		# Create trainable weights for this layer
-		self._actual_y = self.add_weight(name = 'actual_y', shape = (1,), initializer = 'uniform', trainable = True)
-		self._retrived_y = self.add_weight(name = 'retrived_y', shape = (1,), initializer = 'uniform', trainable = True)
+		self.alpha = self.add_weight(name = 'alpha', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
+		super(CombinationGate, self).build(input_shape[0])
 
-		super(GatedLayer, self).build(input_shape)
-
-	def call(self, y_actual, y_retrived):
-		return Lambda(lambda x: x / 2)(Add()([
-			Lambda(lambda x: x / self._actual_y)(y_actual),
-			Lambda(lambda x: x / self._retrived_y)(y_retrived)
-		]))
+	def call(self, x, x_ret, sim):
+		return Add()([
+			Multiply()([
+				self.alpha / sim,
+				x
+			]),
+			Multiply()([
+				1 - (self.alpha / sim),
+				x_ret
+			])
+		])
 	
 	def compute_output_shape(self, input_shape):
-		return input_shape[0]
-	
+		return input_shape
+
 # Define the residual block
 def residual_block(input, input_channels = None, output_channels = None, kernel_size = (3, 3), stride = 1):
 
@@ -342,11 +363,14 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	# Define the regularization factor
 	regularizer = l2(regularization)
 
+	# Define the input layers
+	input_ = Input(shape = (160, 160, 3), name = "img", dtype = tf.float32)
+	sim_ = Input(shape = (), name = "sim", dtype = tf.float64)
+	x_ret_ = Input(shape = (1, 512), name = "ret_img", dtype = tf.float32)
+	gender_ret_ = Input(shape = (), name = "ret_gender", dtype = tf.uint8)
+	age_ret_ = Input(shape = (), name = "ret_age", dtype = tf.uint8)
+
 	# Perform preliminar normalization, reshaping and pooling before feeding the attention network
-	input_ = Input(shape = (160, 160, 3), name = "img")
-	sim_ = Input(shape = (1,), name = "sim")
-	x_ret_ = Input(shape = (1, 512), name = "ret_img")
-	y_ret_ = Input(shape = (1,), name = "ret_label")
 	x = Conv2D(n_channels, (7, 7), strides = (2, 2), padding = "same")(input_)
 	x = BatchNormalization()(x)
 	x = Activation("relu")(x)
@@ -370,26 +394,45 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	pool_size = (x.get_shape()[1], x.get_shape()[2])
 	x = AveragePooling2D(pool_size=pool_size, strides=(1, 1))(x)
 	x = Flatten()(x)
-	
-	# Depending on the similarity, use or not the retrived data
-	if sim_ > 0.5:
-		# If the similarity is above the threshold, use the retrived embedding but dropping out depending on the similarity (confidence)
-		x_ret = Dropout(1 - sim_)(x_ret_)
+	x_ret = Flatten()(x_ret_)
+	sim = tf.cast(sim_, tf.float32)
 
-		# Concatenate the embedding with the input
-		x = Concatenate()([x, x_ret])
+	# First Dense Layer
+	x = Dense(n_channels * 32, kernel_regularizer = regularizer, activation = "relu")(x)
 
-	# Consider the dropout on the entire feature vector if specified
+	# Second Dense Layer: map the embedding to the fixed shape of 512 features
+	x = Dense(512, kernel_regularizer = regularizer, activation = "relu")(x)
+
+	# Combination gate
+	x = CombinationGate()(x, x_ret, sim)
+
+	# Apply dropout if needed
 	if dropout:
 		x = Dropout(dropout)(x)
-	
-	# Calculate the prediction of this model
-	y = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(x)
-	output = PredictionInterpolatorLayer()(y, y_ret_)
 
-	output = Dense(n_classes, kernel_regularizer=regularizer, activation='softmax')(output)
+	# Divide the prediction in two branches
 	
-	model = Model({"img": input_, "sim": sim_, "ret_img": x_ret_, "ret_label": y_ret_}, output)
+	# Gender branch
+	y_ret_gender = tf.one_hot(gender_ret_, depth = 2)
+	x_gender = Dense(2, kernel_regularizer = regularizer, activation = "softmax")(tf.keras.layers.Concatenate(axis = 1)([x, y_ret_gender]))
+
+	# Age branch
+	y_ret_age = tf.one_hot(age_ret_, depth = 12)
+	x_age = Dense(12, kernel_regularizer = regularizer, activation = "softmax")(tf.keras.layers.Concatenate(axis = 1)([x, y_ret_age]))
+
+	model =  Model(
+		{
+			"img": input_, 
+			"sim": sim_, 
+			"ret_img": x_ret_, 
+			"ret_gender": gender_ret_,
+			"ret_age": age_ret_
+		}, 
+		{
+			"gender": x_gender, 
+			"age": x_age
+		}
+	)
 	return model
 
 if __name__ == "__main__":
