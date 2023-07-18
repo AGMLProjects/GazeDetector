@@ -4,11 +4,11 @@ from keras.regularizers import l2
 
 import tensorflow as tf
 import numpy as np
-import pathlib, mlsocket, sys, json, zipfile
+import pathlib, mlsocket, sys, json, random
 
 class NumpyGenerator(tf.keras.utils.Sequence):
 
-	def __init__(self, path: str, batch_size: int = 64, image_shape: tuple = (160, 160, 3)):
+	def __init__(self, path: str, batch_size: int = 64, image_shape: tuple = (160, 160, 3), shuffle: bool = True):
 		self._path = path
 		self._batch_size = batch_size
 		self._image_shape = image_shape
@@ -22,6 +22,8 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 		self._ret_age_file = self._path + "/retrived_age.npy"
 
 		self._opened = False
+		self._shuffle = shuffle
+		self._indices = list(range(0, self.__len__()))
 
 		self._f_im, self._f_em, self._f_sim, self._f_g, self._f_a, self._f_rg, self._f_ra = None, None, None, None, None, None, None
 
@@ -34,13 +36,13 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 	def __getitem__(self, idx):
 		self._open_files()
 
-		x = self._f_im[idx * self._batch_size:(idx + 1) * self._batch_size]
-		x_ret = self._f_em[idx * self._batch_size:(idx + 1) * self._batch_size]
-		sim = self._f_sim[idx * self._batch_size:(idx + 1) * self._batch_size]
-		g = self._f_g[idx * self._batch_size:(idx + 1) * self._batch_size]
-		a = self._f_a[idx * self._batch_size:(idx + 1) * self._batch_size] / 10
-		g_ret = self._f_rg[idx * self._batch_size:(idx + 1) * self._batch_size]
-		a_ret = self._f_ra[idx * self._batch_size:(idx + 1) * self._batch_size] / 10
+		x = self._f_im[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
+		x_ret = self._f_em[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
+		sim = self._f_sim[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
+		g = self._f_g[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
+		a = self._f_a[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size] / 10
+		g_ret = self._f_rg[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
+		a_ret = self._f_ra[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size] / 10
 
 		if self._batch_size > 1:
 			return (
@@ -72,7 +74,8 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 			)
 	
 	def on_epoch_end(self):
-		pass
+		if self._shuffle:
+			random.shuffle(self._indices)
 		
 	def _open_files(self) -> None:
 		if not self._opened:
@@ -89,6 +92,15 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 			self._f_ra = np.memmap(self._ret_age_file, dtype = "uint8", mode = "r", shape = (file_len, 1))
 
 			self._opened = True
+
+class OnEpochCallback(tf.keras.callbacks.Callback):
+	def __init__(self, generator: NumpyGenerator):
+		super(OnEpochCallback, self).__init__()
+		self._generator = generator
+
+	def on_epoch_end(self, epoch, logs = None):
+		print(f"Completed epoch {epoch}")
+		self._generator.on_epoch_end()
 
 class ModelTrainer():
 	def __init__(self, dataset_path: str, batch_size: int, epochs: int, class_name: list, data_regex: str, n_classes: int):
@@ -125,9 +137,10 @@ class ModelTrainer():
 
 	def train_model(self):		
 		dataset_generator = NumpyGenerator(path = self._dataset_path, batch_size = 1)
+		on_epoch_callback = OnEpochCallback(dataset_generator)
 
 		dataset = tf.data.Dataset.from_generator(
-			lambda: self._numpy_generator(dataset_generator), 
+			lambda: dataset_generator, 
 			output_signature = (
 				{
 					"img": tf.TensorSpec(shape = (160, 160, 3), dtype = tf.float32),
@@ -195,7 +208,8 @@ class ModelTrainer():
 			steps_per_epoch = int(train_size / self._batch_size),
 			validation_data = test_ds,
 			shuffle = True,
-			epochs = EPOCHS
+			epochs = EPOCHS,
+			callbacks = [on_epoch_callback]
 		)
 
 		# Print the accuracy
