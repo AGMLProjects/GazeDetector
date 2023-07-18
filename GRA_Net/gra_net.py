@@ -36,13 +36,13 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 	def __getitem__(self, idx):
 		self._open_files()
 
-		x = self._f_im[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
-		x_ret = self._f_em[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
-		sim = self._f_sim[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
-		g = self._f_g[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
-		a = self._f_a[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size] / 10
-		g_ret = self._f_rg[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size]
-		a_ret = self._f_ra[self._indices[idx][idx] * self._batch_size:(self._indices[idx][idx] + 1) * self._batch_size] / 10
+		x = self._f_im[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
+		x_ret = self._f_em[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
+		sim = self._f_sim[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
+		g = self._f_g[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
+		a = self._f_a[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10
+		g_ret = self._f_rg[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
+		a_ret = self._f_ra[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10
 
 		if self._batch_size > 1:
 			return (
