@@ -42,19 +42,34 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 		g_ret = self._f_rg[idx * self._batch_size:(idx + 1) * self._batch_size]
 		a_ret = self._f_ra[idx * self._batch_size:(idx + 1) * self._batch_size] / 10
 
-		return (
-			{
-				"img": tf.convert_to_tensor(x),
-				"ret_img": tf.convert_to_tensor(x_ret),
-				"ret_age": tf.convert_to_tensor(g_ret),
-				"ret_gender": tf.convert_to_tensor(a_ret),
-				"sim": tf.convert_to_tensor(sim)
-			},
-			{
-				"gender": tf.convert_to_tensor(g),
-				"age": tf.convert_to_tensor(a)
-			}
-		)
+		if self._batch_size > 1:
+			return (
+				{
+					"img": tf.convert_to_tensor(x),
+					"ret_img": tf.convert_to_tensor(x_ret),
+					"ret_age": tf.convert_to_tensor(g_ret),
+					"ret_gender": tf.convert_to_tensor(a_ret),
+					"sim": tf.convert_to_tensor(sim)
+				},
+				{
+					"gender": tf.convert_to_tensor(g),
+					"age": tf.convert_to_tensor(a)
+				}
+			)
+		else:
+			return (
+				{
+					"img": tf.convert_to_tensor(x[0]),
+					"ret_img": tf.convert_to_tensor(x_ret[0]),
+					"ret_age": tf.convert_to_tensor(g_ret[0]),
+					"ret_gender": tf.convert_to_tensor(a_ret[0]),
+					"sim": tf.convert_to_tensor(sim[0])
+				},
+				{
+					"gender": tf.convert_to_tensor(g[0]),
+					"age": tf.convert_to_tensor(a[0])
+				}
+			)
 	
 	def on_epoch_end(self):
 		pass
@@ -99,7 +114,7 @@ class ModelTrainer():
 	def _configure_dataset(self, ds):
 		ds = ds.cache()
 		#ds = ds.shuffle(buffer_size = 1000)
-		#ds = ds.batch(32)
+		ds = ds.batch(self._batch_size)
 		ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
 
 		return ds
@@ -109,21 +124,21 @@ class ModelTrainer():
 			yield element
 
 	def train_model(self):		
-		dataset_generator = NumpyGenerator(path = self._dataset_path, batch_size = self._batch_size)
+		dataset_generator = NumpyGenerator(path = self._dataset_path, batch_size = 1)
 
 		dataset = tf.data.Dataset.from_generator(
 			lambda: self._numpy_generator(dataset_generator), 
 			output_signature = (
 				{
-					"img": tf.TensorSpec(shape = (self._batch_size, 160, 160, 3), dtype = tf.float32),
-					"ret_img": tf.TensorSpec(shape = (self._batch_size, 1, 512), dtype = tf.float32),
-					"ret_gender": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
-					"ret_age": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
-					"sim": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.float64)
+					"img": tf.TensorSpec(shape = (160, 160, 3), dtype = tf.float32),
+					"ret_img": tf.TensorSpec(shape = (1, 512), dtype = tf.float32),
+					"ret_gender": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
+					"ret_age": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
+					"sim": tf.TensorSpec(shape = (1,), dtype = tf.float64)
 				},
 				{
-					"gender": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
-					"age": tf.TensorSpec(shape = (self._batch_size, 1), dtype = tf.uint8),
+					"gender": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
+					"age": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
 				}
 			)
 		)
@@ -168,7 +183,7 @@ class ModelTrainer():
 			optimizer = optimizer,
 			loss = loss,
 			metrics = metrics,
-			run_eagerly = True
+			run_eagerly = False
 		)
 
 
@@ -177,7 +192,7 @@ class ModelTrainer():
 		# Train the model
 		model.fit(
 			train_ds,
-			steps_per_epoch = train_size,
+			steps_per_epoch = int(train_size / self._batch_size),
 			validation_data = test_ds,
 			shuffle = True,
 			epochs = EPOCHS
