@@ -40,9 +40,9 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 		x_ret = self._f_em[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
 		sim = self._f_sim[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
 		g = self._f_g[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
-		a = self._f_a[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10
+		a = np.clip(self._f_a[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10, 0, 9)
 		g_ret = self._f_rg[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
-		a_ret = self._f_ra[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10
+		a_ret = np.clip(self._f_ra[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10, 0, 9)
 
 		if self._batch_size > 1:
 			return (
@@ -247,23 +247,23 @@ class CombinationGate(Layer):
 	def build(self, input_shape):
 		# Create trainable weights for this layer
 		self.alpha = self.add_weight(name = 'alpha', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
-		self.beta = self.add_weight(name = 'beta', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
 		super(CombinationGate, self).build(input_shape[0])
 
 	def call(self, x, x_ret, sim):
-		if sim >= self.beta:
-			return Add()([
-				Multiply()([
-					self.alpha,
-					x
-				]),
-				Multiply()([
-					(1 - self.alpha),
-					x_ret
-				])
+		s = tf.keras.backend.cast(sim >= 0.5, dtype = tf.float32)
+
+		return Add()([
+			Multiply()([
+				self.alpha,
+				pow(1, s),
+				x
+			]),
+			Multiply()([
+				(1 - self.alpha),
+				s,
+				x_ret
 			])
-		else:
-			return x
+		])
 	
 	def compute_output_shape(self, input_shape):
 		return input_shape
