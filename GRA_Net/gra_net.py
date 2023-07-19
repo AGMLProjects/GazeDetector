@@ -36,6 +36,8 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 	def __getitem__(self, idx):
 		self._open_files()
 
+		idx = idx % self.__len__()
+
 		x = self._f_im[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
 		x_ret = self._f_em[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
 		sim = self._f_sim[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
