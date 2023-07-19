@@ -125,6 +125,7 @@ class ModelTrainer():
 
 	def _configure_dataset(self, ds):
 		ds = ds.cache()
+		ds = ds.repeat()
 		ds = ds.batch(self._batch_size)
 		ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
 
