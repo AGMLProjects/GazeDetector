@@ -512,6 +512,9 @@ if __name__ == "__main__":
 		camera_socket.bind(("0.0.0.0", 12345))
 		camera_socket.listen()
 
+		model = GenderNetwork(shape = (160, 160, 3), n_channels = 64, n_classes = 2, dropout = 0.1, regularization = 0.01)
+		model.load_weights("GraNet.h5")
+
 		retrival_connector = mlsocket.MLSocket()
 		retrival_connector.connect(("127.0.0.1", 65432))
 
@@ -526,8 +529,6 @@ if __name__ == "__main__":
 				if data == b"":
 					break
 
-				print(type(data))
-
 				retrival_connector.send(data)
 				metadata = retrival_connector.recv(1024)
 				metadata = json.loads(metadata.decode("utf-8"))
@@ -537,9 +538,21 @@ if __name__ == "__main__":
 				else:
 					if metadata["status"] == True:
 						embedding = retrival_connector.recv(1024)
-					else:
-						embedding = None
+						inputs = {
+							"img" : data,
+							"sim" : metadata["similarity"],
+							"ret_img" : embedding,
+							"ret_gender": metadata["gender"],
+							"ret_age": metadata["age"]
+						}
 
-				print(metadata)
-				camera.send(json.dumps({"age": metadata["age"], "gender": metadata["gender"]}).encode("UTF-8"))
+						prediction = model.predict(inputs)
+
+						camera.send(json.dumps({"status": False, "age": prediction["age"], "gender": prediction["gender"]}).encode("UTF-8"))
+					else:
+						camera.send(json.dumps({"status": False, "age": 0, "gender": 0}).encode("UTF-8"))
+
+
+
+
 
