@@ -88,7 +88,6 @@ class Demo:
 
         self.visualizer.set_image(image.copy())
         faces = self.gaze_estimator.detect_faces(undistorted)
-        demographic_info = {'gender': -1, 'age': -1}
         for face in faces:
             self.gaze_estimator.estimate_gaze(undistorted, face)
             self._draw_face_bbox(face)
@@ -100,12 +99,11 @@ class Demo:
 
             if self.config.demo.demographic_classifier:
                 face_frame = self._get_normalized_face(image, face)
-                # TODO: send face_frame to GraNet, receive gender and age
                 with MLSocket() as socket:
                     socket.connect(self.connection)
                     socket.send(face_frame)
                     response = socket.recv(1024)
-                gender, age = (1, 25)
+                gender, age = (response[0], response[1])
                 if not self.config.demo.use_camera:
                     self._display_demographic_data(gender, age)
 
