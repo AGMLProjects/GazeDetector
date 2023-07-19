@@ -125,7 +125,6 @@ class ModelTrainer():
 
 	def _configure_dataset(self, ds):
 		ds = ds.cache()
-		#ds = ds.shuffle(buffer_size = 1000)
 		ds = ds.batch(self._batch_size)
 		ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
 
@@ -189,7 +188,7 @@ class ModelTrainer():
 
 		optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001, weight_decay = 0.0001, use_ema = True, ema_momentum = 0.9, clipnorm = 1.0)
 		loss = {"gender": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False), "age": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False)}
-		metrics = {"gender": tf.keras.metrics.SparseCategoricalAccuracy(), "age": tf.keras.metrics.SparseCategoricalAccuracy()}
+		metrics = {"gender": tf.keras.metrics.SparseCategoricalAccuracy(name = "Gender Accuracy"), "age": tf.keras.metrics.SparseCategoricalAccuracy(name = "Age Accuracy")}
 
 		# Compile the model
 		model.compile(
@@ -240,6 +239,7 @@ class GatedLayer(Layer):
 	def compute_output_shape(self, input_shape):
 		return input_shape[0]
 
+# Define the CombinationGate class which will be used to combine the embedding of the current image with the embedding of the retrieved image
 class CombinationGate(Layer):
 	def __init__(self, **kwargs):
 		super(CombinationGate, self).__init__(**kwargs)
@@ -247,19 +247,23 @@ class CombinationGate(Layer):
 	def build(self, input_shape):
 		# Create trainable weights for this layer
 		self.alpha = self.add_weight(name = 'alpha', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
+		self.beta = self.add_weight(name = 'beta', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
 		super(CombinationGate, self).build(input_shape[0])
 
 	def call(self, x, x_ret, sim):
-		return Add()([
-			Multiply()([
-				self.alpha / sim,
-				x
-			]),
-			Multiply()([
-				1 - (self.alpha / sim),
-				x_ret
+		if sim >= self.beta:
+			return Add()([
+				Multiply()([
+					self.alpha,
+					x
+				]),
+				Multiply()([
+					(1 - self.alpha),
+					x_ret
+				])
 			])
-		])
+		else:
+			return x
 	
 	def compute_output_shape(self, input_shape):
 		return input_shape
@@ -447,8 +451,8 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	x_gender = Dense(2, kernel_regularizer = regularizer, activation = "softmax")(tf.keras.layers.Concatenate(axis = 1)([x, y_ret_gender]))
 
 	# Age branch
-	y_ret_age = tf.one_hot(age_ret_, depth = 12)
-	x_age = Dense(12, kernel_regularizer = regularizer, activation = "softmax")(tf.keras.layers.Concatenate(axis = 1)([x, y_ret_age]))
+	y_ret_age = tf.one_hot(age_ret_, depth = 10)
+	x_age = Dense(10, kernel_regularizer = regularizer, activation = "softmax")(tf.keras.layers.Concatenate(axis = 1)([x, y_ret_age]))
 
 	model =  Model(
 		{
