@@ -125,7 +125,6 @@ class ModelTrainer():
 
 	def _configure_dataset(self, ds):
 		ds = ds.cache()
-		ds = ds.repeat()
 		ds = ds.batch(self._batch_size)
 		ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
 
@@ -155,6 +154,8 @@ class ModelTrainer():
 				}
 			)
 		)
+
+		dataset = dataset.repeat()
 
 		# Split the dataset in train and test
 		train_size = int(0.8 * dataset_generator.__len__())
