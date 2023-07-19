@@ -36,13 +36,15 @@ class NumpyGenerator(tf.keras.utils.Sequence):
 	def __getitem__(self, idx):
 		self._open_files()
 
+		idx = idx % self.__len__()
+
 		x = self._f_im[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
 		x_ret = self._f_em[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
 		sim = self._f_sim[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
 		g = self._f_g[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
-		a = self._f_a[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10
+		a = np.clip(self._f_a[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10, 0, 9)
 		g_ret = self._f_rg[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size]
-		a_ret = self._f_ra[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10
+		a_ret = np.clip(self._f_ra[self._indices[idx] * self._batch_size:(self._indices[idx] + 1) * self._batch_size] / 10, 0, 9)
 
 		if self._batch_size > 1:
 			return (
@@ -155,6 +157,8 @@ class ModelTrainer():
 			)
 		)
 
+		dataset = dataset.repeat()
+
 		# Split the dataset in train and test
 		train_size = int(0.8 * dataset_generator.__len__())
 		train_ds = dataset.take(train_size)
@@ -247,23 +251,23 @@ class CombinationGate(Layer):
 	def build(self, input_shape):
 		# Create trainable weights for this layer
 		self.alpha = self.add_weight(name = 'alpha', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
-		self.beta = self.add_weight(name = 'beta', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
 		super(CombinationGate, self).build(input_shape[0])
 
 	def call(self, x, x_ret, sim):
-		if sim >= self.beta:
-			return Add()([
-				Multiply()([
-					self.alpha,
-					x
-				]),
-				Multiply()([
-					(1 - self.alpha),
-					x_ret
-				])
+		s = tf.keras.backend.cast(sim >= 0.5, dtype = tf.float32)
+
+		return Add()([
+			Multiply()([
+				self.alpha,
+				pow(1, s),
+				x
+			]),
+			Multiply()([
+				(1 - self.alpha),
+				s,
+				x_ret
 			])
-		else:
-			return x
+		])
 	
 	def compute_output_shape(self, input_shape):
 		return input_shape
@@ -512,6 +516,9 @@ if __name__ == "__main__":
 		camera_socket.bind(("0.0.0.0", 12345))
 		camera_socket.listen()
 
+		model = GenderNetwork(shape = (160, 160, 3), n_channels = 64, n_classes = 2, dropout = 0.1, regularization = 0.01)
+		model.load_weights("GraNet.h5")
+
 		retrival_connector = mlsocket.MLSocket()
 		retrival_connector.connect(("127.0.0.1", 65432))
 
@@ -526,8 +533,6 @@ if __name__ == "__main__":
 				if data == b"":
 					break
 
-				print(type(data))
-
 				retrival_connector.send(data)
 				metadata = retrival_connector.recv(1024)
 				metadata = json.loads(metadata.decode("utf-8"))
@@ -537,9 +542,21 @@ if __name__ == "__main__":
 				else:
 					if metadata["status"] == True:
 						embedding = retrival_connector.recv(1024)
-					else:
-						embedding = None
+						inputs = {
+							"img" : data,
+							"sim" : metadata["similarity"],
+							"ret_img" : embedding,
+							"ret_gender": metadata["gender"],
+							"ret_age": metadata["age"]
+						}
 
-				print(metadata)
-				camera.send(json.dumps({"age": metadata["age"], "gender": metadata["gender"]}).encode("UTF-8"))
+						prediction = model.predict(inputs)
+
+						camera.send(json.dumps({"status": False, "age": prediction["age"], "gender": prediction["gender"]}).encode("UTF-8"))
+					else:
+						camera.send(json.dumps({"status": False, "age": 0, "gender": 0}).encode("UTF-8"))
+
+
+
+
 

@@ -7,22 +7,24 @@ import tensorflow_datasets as tfds
 if __name__ == "__main__":
 
 	BATCH_SIZE = 64
+	SOURCE_DATASET_PATH = "/home/lorenzo/Dataset"
+	DESTINATION_DATASET_PATH = "/home/lorenzo/GazeDetection/GRA_Net/Dataset"
 
 	# Load the dataset path
-	data_directory = pathlib.Path("/home/lorenzo/Dataset")
+	data_directory = pathlib.Path(SOURCE_DATASET_PATH)
 	print("Dataset path: " + str(data_directory))
 
 	image_count = len(list(data_directory.glob("*.jpg")))
 	print("Dataset size: " + str(image_count))
 
 	# Load the dataset
-	list_ds = tf.data.Dataset.list_files(str(data_directory/"*.jpg"), shuffle = False)
+	list_ds = tf.data.Dataset.list_files(str(data_directory/"*.jpg"), shuffle = True)
 
 	retrival_connector = mlsocket.MLSocket()
-	#retrival_connector.connect(("127.0.0.1", 65431))
+	retrival_connector.connect(("127.0.0.1", 65431))
 
-	if pathlib.Path("Dataset/images.npy").exists():
-		t = np.memmap("Dataset/images.npy", dtype = "float32", mode = "r")
+	if pathlib.Path(f"{DESTINATION_DATASET_PATH}/images.npy").exists():
+		t = np.memmap(f"{DESTINATION_DATASET_PATH}/images.npy", dtype = "float32", mode = "r")
 		skip_images = int(t.shape[0] / (160*160*3))
 		completed_steps = int(skip_images / 64)
 		del t
@@ -93,73 +95,73 @@ if __name__ == "__main__":
 
 		if i % BATCH_SIZE == 0 and i != 0:
 			if y == 0:
-				f = np.memmap("images.npy", dtype = "float32", mode = "w+", shape = (i, x_shape[0], x_shape[1], x_shape[2]))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/images.npy", dtype = "float32", mode = "w+", shape = (i, x_shape[0], x_shape[1], x_shape[2]))
 				f[:, :, :, :] = x[:, :, :, :]
 				f.flush()
 				del f
 
-				f = np.memmap("embeddings.npy", dtype = "float32", mode = "w+", shape = (i, x_ret_shape[0], x_ret_shape[1]))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/embeddings.npy", dtype = "float32", mode = "w+", shape = (i, x_ret_shape[0], x_ret_shape[1]))
 				f[:, :, :] = x_ret[:, :, :]
 				f.flush()
 				del f
 
-				f = np.memmap("gender.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/gender.npy", dtype = "uint8", mode = "w+", shape = (i,))
 				f[:] = g[:]
 				f.flush()
 				del f
 
-				f = np.memmap("age.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/age.npy", dtype = "uint8", mode = "w+", shape = (i,))
 				f[:] = a[:]
 				f.flush()
 				del f
 
-				f = np.memmap("retrived_gender.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/retrived_gender.npy", dtype = "uint8", mode = "w+", shape = (i,))
 				f[:] = g_ret[:]
 				f.flush()
 				del f
 
-				f = np.memmap("retrived_age.npy", dtype = "uint8", mode = "w+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/retrived_age.npy", dtype = "uint8", mode = "w+", shape = (i,))
 				f[:] = a_ret[:]
 				f.flush()
 				del f
 
-				f = np.memmap("similarity.npy", dtype = "float64", mode = "w+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/similarity.npy", dtype = "float64", mode = "w+", shape = (i,))
 				f[:] = s[:]
 				f.flush()
 				del f
 
 			else:
-				f = np.memmap("images.npy", dtype = "float32", mode = "r+", shape = (i, x_shape[0], x_shape[1], x_shape[2]))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/images.npy", dtype = "float32", mode = "r+", shape = (i, x_shape[0], x_shape[1], x_shape[2]))
 				f[i - BATCH_SIZE:, :, :, :] = x
 				f.flush()
 				del f
 
-				f = np.memmap("embeddings.npy", dtype = "float32", mode = "r+", shape = (i, x_ret_shape[0], x_ret_shape[1]))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/embeddings.npy", dtype = "float32", mode = "r+", shape = (i, x_ret_shape[0], x_ret_shape[1]))
 				f[i - BATCH_SIZE:, :, :] = x_ret
 				f.flush()
 				del f
 
-				f = np.memmap("gender.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/gender.npy", dtype = "uint8", mode = "r+", shape = (i,))
 				f[i - BATCH_SIZE:] = g
 				f.flush()
 				del f
 
-				f = np.memmap("age.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/age.npy", dtype = "uint8", mode = "r+", shape = (i,))
 				f[i - BATCH_SIZE:] = a
 				f.flush()
 				del f
 
-				f = np.memmap("retrived_gender.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/retrived_gender.npy", dtype = "uint8", mode = "r+", shape = (i,))
 				f[i - BATCH_SIZE:] = g_ret
 				f.flush()
 				del f
 
-				f = np.memmap("retrived_age.npy", dtype = "uint8", mode = "r+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/retrived_age.npy", dtype = "uint8", mode = "r+", shape = (i,))
 				f[i - BATCH_SIZE:] = a_ret
 				f.flush()
 				del f
 
-				f = np.memmap("similarity.npy", dtype = "float64", mode = "r+", shape = (i,))
+				f = np.memmap(f"{DESTINATION_DATASET_PATH}/similarity.npy", dtype = "float64", mode = "r+", shape = (i,))
 				f[i - BATCH_SIZE:] = s
 				f.flush()
 				del f
@@ -167,6 +169,12 @@ if __name__ == "__main__":
 			x, x_ret, g, a, g_ret, a_ret, s = None, None, None, None, None, None, None
 			y = int(i / BATCH_SIZE)
 			print(f"Calculated batch {y}/{int(image_count / BATCH_SIZE)}")
+
+			if y % 50 == 0:
+				retrival_connector.close()
+				retrival_connector = mlsocket.MLSocket()
+				retrival_connector.connect(("127.0.0.1", 65431))
+				print("Restarted the connection")
 			
 		
-		i= i + 1
+		i = i + 1
