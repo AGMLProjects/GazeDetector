@@ -3,6 +3,7 @@ import pathlib
 from typing import Optional
 from matplotlib import pyplot as plt
 from mlsocket import MLSocket
+import json
 
 import cv2
 import numpy as np
@@ -88,6 +89,8 @@ class Demo:
 
         self.visualizer.set_image(image.copy())
         faces = self.gaze_estimator.detect_faces(undistorted)
+        gender = -1
+        age = -1
         for face in faces:
             self.gaze_estimator.estimate_gaze(undistorted, face)
             self._draw_face_bbox(face)
@@ -102,8 +105,8 @@ class Demo:
                 with MLSocket() as socket:
                     socket.connect(self.connection)
                     socket.send(face_frame)
-                    response = socket.recv(1024)
-                gender, age = (response[0], response[1])
+                    response = json.loads(socket.recv(1024).decode('utf-8'))
+                gender, age = (response['gender'], response['age'])
                 if not self.config.demo.use_camera:
                     self._display_demographic_data(gender, age)
 

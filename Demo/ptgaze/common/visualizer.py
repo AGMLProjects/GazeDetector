@@ -31,15 +31,14 @@ class Visualizer:
     def show_demographic_data(self, gender: int, age: int) -> None:
         assert self.image is not None
         self.image = np.array(self.image)
-        text = f'Gender: {"MALE" if gender == 1 else "FEMALE"}'
+        text = f'Gender: {"MALE" if gender == 0 else "FEMALE"}'
         font = cv2.FONT_HERSHEY_PLAIN
         org = (10, 30)
         fontScale = 1.5
         color = (0, 173, 3)
         thickness = 1
         cv2.putText(self.image, text, org, font, fontScale, color, thickness, cv2.LINE_AA)
-        age = int(age / 10)
-        age = int(age * 10)
+        age = age * 10
         text = f'Age range: {age}-{age + 10}'
         org = (10, 55)
         cv2.putText(self.image, text, org, font, fontScale, color, thickness, cv2.LINE_AA)
