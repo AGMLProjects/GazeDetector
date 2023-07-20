@@ -126,6 +126,7 @@ class ModelTrainer():
 		self._image_size = 64
 
 	def _configure_dataset(self, ds):
+		ds = ds.repeat()
 		ds = ds.cache()
 		ds = ds.batch(self._batch_size)
 		ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
@@ -137,11 +138,11 @@ class ModelTrainer():
 			yield element
 
 	def train_model(self):		
-		dataset_generator = NumpyGenerator(path = self._dataset_path, batch_size = 1)
-		on_epoch_callback = OnEpochCallback(dataset_generator)
+		dataset_generator_train = NumpyGenerator(path = self._dataset_path + "/train", batch_size = 1)
+		on_epoch_callback_train = OnEpochCallback(dataset_generator_train)
 
-		dataset = tf.data.Dataset.from_generator(
-			lambda: dataset_generator, 
+		train_ds = tf.data.Dataset.from_generator(
+			lambda: dataset_generator_train, 
 			output_signature = (
 				{
 					"img": tf.TensorSpec(shape = (160, 160, 3), dtype = tf.float32),
@@ -157,13 +158,31 @@ class ModelTrainer():
 			)
 		)
 
-		dataset = dataset.repeat()
+		dataset_generator_test = NumpyGenerator(path = self._dataset_path + "/test", batch_size = 1)
+		on_epoch_callback_test = OnEpochCallback(dataset_generator_test)
 
-		# Split the dataset in train and test
-		train_size = int(0.8 * dataset_generator.__len__())
-		train_ds = dataset.take(train_size)
-		test_ds = dataset.skip(train_size)
+		train_ds = tf.data.Dataset.from_generator(
+			lambda: dataset_generator_test, 
+			output_signature = (
+				{
+					"img": tf.TensorSpec(shape = (160, 160, 3), dtype = tf.float32),
+					"ret_img": tf.TensorSpec(shape = (1, 512), dtype = tf.float32),
+					"ret_gender": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
+					"ret_age": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
+					"sim": tf.TensorSpec(shape = (1,), dtype = tf.float64)
+				},
+				{
+					"gender": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
+					"age": tf.TensorSpec(shape = (1,), dtype = tf.uint8),
+				}
+			)
+		)
 
+		# Get the size of the dataset
+		train_size = len(dataset_generator_train)
+		test_size = len(dataset_generator_test)
+
+		
 		# Preprocessing steps
 		rescale = tf.keras.Sequential([
 			tf.keras.layers.Rescaling(1. / 255)
@@ -194,6 +213,13 @@ class ModelTrainer():
 		loss = {"gender": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False), "age": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False)}
 		metrics = {"gender": tf.keras.metrics.SparseCategoricalAccuracy(name = "Gender Accuracy"), "age": tf.keras.metrics.SparseCategoricalAccuracy(name = "Age Accuracy")}
 
+		checkpoint_saver = tf.keras.callbacks.ModelCheckpoint(
+			filepath = "./checkpoints",
+			save_weights_only = True,
+			save_best_only = False,
+			save_freq = "epoch"
+		)
+
 		# Compile the model
 		model.compile(
 			optimizer = optimizer,
@@ -210,13 +236,19 @@ class ModelTrainer():
 			train_ds,
 			steps_per_epoch = int(train_size / self._batch_size),
 			validation_data = test_ds,
+			validation_steps = int(test_size / self._batch_size),
 			shuffle = True,
 			epochs = EPOCHS,
-			callbacks = [on_epoch_callback]
+			callbacks = [on_epoch_callback_train, on_epoch_callback_test, checkpoint_saver]
 		)
 
 		# Print the accuracy
-		print("Accuracy: {}".format(model.evaluate(test_ds)[1]))
+		result = model.evaluate(
+			test_ds,
+			batch_size = self._batch_size,
+			steps = int(test_size / self._batch_size) - 1
+		)
+		print("Gender Accuracy: {} - Age Accuracy: {}".format(result[1]))
 
 		model.save("GraNet.h5")
 

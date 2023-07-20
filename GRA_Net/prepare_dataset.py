@@ -1,14 +1,13 @@
 import numpy as np
 import pathlib, mlsocket, time, json
 import tensorflow as tf
-import tensorflow_datasets as tfds
 
 
 if __name__ == "__main__":
 
-	BATCH_SIZE = 64
-	SOURCE_DATASET_PATH = "/home/lorenzo/Dataset"
-	DESTINATION_DATASET_PATH = "/home/lorenzo/GazeDetection/GRA_Net/Dataset"
+	BATCH_SIZE = 256
+	SOURCE_DATASET_PATH = "/home/lorenzo/Dataset/part1"
+	DESTINATION_DATASET_PATH = "/home/lorenzo/GazeDetection/GRA_Net/Dataset/train"
 
 	# Load the dataset path
 	data_directory = pathlib.Path(SOURCE_DATASET_PATH)
@@ -21,7 +20,7 @@ if __name__ == "__main__":
 	list_ds = tf.data.Dataset.list_files(str(data_directory/"*.jpg"), shuffle = True)
 
 	retrival_connector = mlsocket.MLSocket()
-	retrival_connector.connect(("127.0.0.1", 65431))
+	retrival_connector.connect(("127.0.0.1", 65432))
 
 	if pathlib.Path(f"{DESTINATION_DATASET_PATH}/images.npy").exists():
 		t = np.memmap(f"{DESTINATION_DATASET_PATH}/images.npy", dtype = "float32", mode = "r")
@@ -169,12 +168,6 @@ if __name__ == "__main__":
 			x, x_ret, g, a, g_ret, a_ret, s = None, None, None, None, None, None, None
 			y = int(i / BATCH_SIZE)
 			print(f"Calculated batch {y}/{int(image_count / BATCH_SIZE)}")
-
-			if y % 50 == 0:
-				retrival_connector.close()
-				retrival_connector = mlsocket.MLSocket()
-				retrival_connector.connect(("127.0.0.1", 65431))
-				print("Restarted the connection")
 			
 		
 		i = i + 1

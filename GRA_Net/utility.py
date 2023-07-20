@@ -27,9 +27,27 @@ def dataset_generator():
         for row in data["arr_0"]:
             yield row
 
+def divide_images():
+    dataset_dir = "/home/lorenzo/Dataset"
+    image_count = len(list(pathlib.Path(dataset_dir).glob("*.jpg")))
+
+    dir_num = int(image_count / 1000) + 1
+
+    # Create directories
+    for i in range(dir_num):
+        pathlib.Path(dataset_dir + "/" + str(i)).mkdir(parents=True, exist_ok=True)
+
+    shuffle = list(pathlib.Path(dataset_dir).glob("*.jpg"))
+    np.random.shuffle(shuffle)
+
+    # Move the images
+    for i in range(image_count):
+        pathlib.Path(shuffle[i]).rename(dataset_dir + "/" + str(int(i / 1000)) + "/" + shuffle[i].name)
+
+
 
 if __name__ == "__main__":
 
-    for row in dataset_generator():
-        print(row)
-        break
+    divide_images()
+    #merge_dataset()
+    #dataset_generator()
