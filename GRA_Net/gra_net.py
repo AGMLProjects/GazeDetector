@@ -185,6 +185,7 @@ class ModelTrainer():
 		
 		# Preprocessing steps
 		rescale = tf.keras.Sequential([
+			tf.keras.layers.Resizing(self._image_size, self._image_size),
 			tf.keras.layers.Rescaling(1. / 255)
 		])
 
@@ -434,7 +435,7 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	regularizer = l2(regularization)
 
 	# Define the input layers
-	input_ = Input(shape = (160, 160, 3), name = "img", dtype = tf.float32)
+	input_ = Input(shape = shape, name = "img", dtype = tf.float32)
 	sim_ = Input(shape = (), name = "sim", dtype = tf.float64)
 	x_ret_ = Input(shape = (1, 512), name = "ret_img", dtype = tf.float32)
 	gender_ret_ = Input(shape = (), name = "ret_gender", dtype = tf.uint8)
@@ -539,7 +540,7 @@ if __name__ == "__main__":
 		camera_socket.bind(("0.0.0.0", 12345))
 		camera_socket.listen()
 
-		model = GenderNetwork(shape = (160, 160, 3), n_channels = 64, n_classes = 2, dropout = 0.1, regularization = 0.01)
+		model = GenderNetwork(shape = (64, 64, 3), n_channels = 64, n_classes = 2, dropout = 0.1, regularization = 0.01)
 		model.load_weights("GraNet.h5")
 
 		retrival_connector = mlsocket.MLSocket()
