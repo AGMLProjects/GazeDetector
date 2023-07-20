@@ -161,7 +161,7 @@ class ModelTrainer():
 		dataset_generator_test = NumpyGenerator(path = self._dataset_path + "/test", batch_size = 1)
 		on_epoch_callback_test = OnEpochCallback(dataset_generator_test)
 
-		train_ds = tf.data.Dataset.from_generator(
+		test_ds = tf.data.Dataset.from_generator(
 			lambda: dataset_generator_test, 
 			output_signature = (
 				{
