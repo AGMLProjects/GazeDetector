@@ -13,8 +13,7 @@ face_detector:
   mediapipe_max_num_faces: 1
   mediapipe_static_image_mode: false
 gaze_estimator:
-  checkpoint: ~/.ptgaze/models/mpiifacegaze_resnet_simple.pth
-  #checkpoint: C:\uni\cv\GazeDetectionProject\GazeEstimator\outputs\trained_model_202307021737.pth
+  checkpoint: C:\uni\cv\GazeDetectionProject\GazeEstimator\outputs\trained_model_202307021737.pth
   camera_params: ${PACKAGE_ROOT}/data/calib/sample_params.yaml
   use_dummy_camera_params: false
   normalized_camera_params: ${PACKAGE_ROOT}/data/normalized_camera_params/mpiifacegaze.yaml
