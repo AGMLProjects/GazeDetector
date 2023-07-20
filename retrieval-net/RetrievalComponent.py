@@ -168,7 +168,6 @@ class RetrievalComponent:
 
         similarities = cosine_similarity(new_embedding.reshape(1, -1), embeddings)
 
-        # Get the index of the second maximum value
         most_similar_index = np.argpartition(similarities[0], -2)[-2]
 
         max_similarity = similarities[0][most_similar_index]
