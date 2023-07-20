@@ -105,7 +105,7 @@ class OnEpochCallback(tf.keras.callbacks.Callback):
 		self._generator.on_epoch_end()
 
 class ModelTrainer():
-	def __init__(self, dataset_path: str, batch_size: int, epochs: int, class_name: list, data_regex: str, n_classes: int):
+	def __init__(self, dataset_path: str, batch_size: int, epochs: int, class_name: list, data_regex: str, n_classes: int = 2):
 		for item in [dataset_path, data_regex]:
 			if not isinstance(item, str):
 				raise TypeError("The dataset path and the data regex must be strings")
@@ -178,7 +178,7 @@ class ModelTrainer():
 		])
 
 		train_ds = train_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_gender": x["ret_gender"], "ret_age": x["ret_age"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
-		train_ds = train_ds.concatenate(train_ds.map(lambda x, y: ({"img": data_augmentation(x["img"], training = True), "ret_img": x["ret_img"], "ret_gender": x["ret_gender"], "ret_age": x["ret_age"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE))
+		train_ds = train_ds.map(lambda x, y: ({"img": data_augmentation(x["img"], training = True), "ret_img": x["ret_img"], "ret_gender": x["ret_gender"], "ret_age": x["ret_age"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
 
 		test_ds = test_ds.map(lambda x, y: ({"img": rescale(x["img"]), "ret_img": x["ret_img"], "ret_gender": x["ret_gender"], "ret_age": x["ret_age"], "sim": x["sim"]}, y), num_parallel_calls = tf.data.AUTOTUNE)
 
@@ -483,32 +483,23 @@ if __name__ == "__main__":
 	DATA_REGEX = r"([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)\.jpg"
 
 	if len(sys.argv) < 2:
-		print("Usage: [train|inference] {[dataset_path] [gender|age]}")
+		print("Usage: [train|inference] {[dataset_path]}")
 		sys.exit(1)
 	else:
 		mode = sys.argv[1]
 
 		if mode not in ["train", "inference"]:
-			print("Usage: [train|inference] {[dataset_path] [gender|age]}")
+			print("Usage: [train|inference] {[dataset_path]}")
 			sys.exit(1)
 
 		if mode == "train":
-			if len(sys.argv) < 4:
-				print("If used in train mode: [train|inference] [dataset_path] [gender|age]")
+			if len(sys.argv) < 3:
+				print("If used in train mode: [train|inference] [dataset_path]")
 			else:
 				dataset_path = sys.argv[2]
-				train_type = sys.argv[3]
-
-				if train_type not in ["gender", "age"]:
-					print("Usage: [train|inference] {[dataset_path] [gender|age]}")
-					sys.exit(1)
 
 	if mode == "train":
-		if train_type == "gender":
-			trainer = ModelTrainer(dataset_path = dataset_path, batch_size = BATCH_SIZE, epochs = EPOCHS, class_name = CLASS_NAME, data_regex = DATA_REGEX, n_classes = 2)
-		else:
-			trainer = ModelTrainer(dataset_path = dataset_path, batch_size = BATCH_SIZE, epochs = EPOCHS, class_name = CLASS_NAME, data_regex = DATA_REGEX, n_classes = 10)
-
+		trainer = ModelTrainer(dataset_path = dataset_path, batch_size = BATCH_SIZE, epochs = EPOCHS, class_name = CLASS_NAME, data_regex = DATA_REGEX)
 		trainer.train_model()
 		sys.exit(0)
 	else:
