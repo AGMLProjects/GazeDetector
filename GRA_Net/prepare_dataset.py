@@ -25,7 +25,7 @@ if __name__ == "__main__":
 	if pathlib.Path(f"{DESTINATION_DATASET_PATH}/images.npy").exists():
 		t = np.memmap(f"{DESTINATION_DATASET_PATH}/images.npy", dtype = "float32", mode = "r")
 		skip_images = int(t.shape[0] / (160*160*3))
-		completed_steps = int(skip_images / 64)
+		completed_steps = int(skip_images / BATCH_SIZE)
 		del t
 	else:
 		skip_images = 0

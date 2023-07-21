@@ -105,24 +105,11 @@ class OnEpochCallback(tf.keras.callbacks.Callback):
 		self._generator.on_epoch_end()
 
 class ModelTrainer():
-	def __init__(self, dataset_path: str, batch_size: int, epochs: int, class_name: list, data_regex: str, n_classes: int = 2):
-		for item in [dataset_path, data_regex]:
-			if not isinstance(item, str):
-				raise TypeError("The dataset path and the data regex must be strings")
-			
-		for item in [batch_size, epochs, n_classes]:
-			if not isinstance(item, int):
-				raise TypeError("The batch size, the epochs and the n_classes must be integers")
-			
-		if not isinstance(class_name, list):
-			raise TypeError("The class name must be a list")
+	def __init__(self, dataset_path: str, batch_size: int, epochs: int):
 		
 		self._dataset_path = dataset_path
 		self._batch_size = batch_size
 		self._epochs = epochs
-		self._class_name = class_name
-		self._data_regex = data_regex
-		self._n_classes = n_classes
 		self._image_size = 64
 
 	def _configure_dataset(self, ds):
@@ -132,10 +119,6 @@ class ModelTrainer():
 		ds = ds.prefetch(buffer_size = tf.data.AUTOTUNE)
 
 		return ds
-	
-	def _numpy_generator(self, iterator: NumpyGenerator):
-		for element in iterator:
-			yield element
 
 	def train_model(self):		
 		dataset_generator_train = NumpyGenerator(path = self._dataset_path + "/train", batch_size = 1)
@@ -208,9 +191,11 @@ class ModelTrainer():
 		test_ds = self._configure_dataset(test_ds)
 
 		# Define the model
-		model = GenderNetwork(shape = (self._image_size, self._image_size, 3), n_channels = 64, n_classes = self._n_classes, dropout = 0.1, regularization = 0.01)
+		# NOTE: n_classes is useless, can be removed
+		model = GenderNetwork(shape = (self._image_size, self._image_size, 3), n_channels = 64, n_classes = 10, dropout = 0.1, regularization = 0.01)
 
-		optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001, weight_decay = 0.0001, use_ema = True, ema_momentum = 0.9, clipnorm = 1.0)
+		#optimizer = tf.keras.optimizers.SGD(learning_rate = 0.0001, weight_decay = 0.0001, use_ema = True, ema_momentum = 0.9, clipnorm = 1.0)
+		optimizer = tf.keras.optimizers.Adam(learning_rate = 0.0001, beta_1 = 0.9, beta_2 = 0.999, epsilon = 1e-07, amsgrad = False, name = "Adam", clipnorm = 1.0)
 		loss = {"gender": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False), "age": tf.keras.losses.SparseCategoricalCrossentropy(from_logits = False)}
 		metrics = {"gender": tf.keras.metrics.SparseCategoricalAccuracy(name = "Gender Accuracy"), "age": tf.keras.metrics.SparseCategoricalAccuracy(name = "Age Accuracy")}
 
@@ -231,17 +216,19 @@ class ModelTrainer():
 
 
 		model.summary()
-		
+
 		# Train the model
 		model.fit(
 			train_ds,
 			steps_per_epoch = int(train_size / self._batch_size),
 			validation_data = test_ds,
 			validation_steps = int(test_size / self._batch_size),
-			shuffle = True,
+			shuffle = False,
 			epochs = EPOCHS,
 			callbacks = [on_epoch_callback_train, on_epoch_callback_test, checkpoint_saver]
 		)
+
+		model.save("GraNet.h5")
 
 		# Print the accuracy
 		result = model.evaluate(
@@ -249,9 +236,7 @@ class ModelTrainer():
 			batch_size = self._batch_size,
 			steps = int(test_size / self._batch_size) - 1
 		)
-		print("Gender Accuracy: {} - Age Accuracy: {}".format(result[1]))
-
-		model.save("GraNet.h5")
+		print("Age loss {} - Gender loss {} - Age Accuracy {} - Gender Accuracy {}".format(result))
 
 # Define the GatedLayer class which will be define both the residual and the gated blocks
 class GatedLayer(Layer):
@@ -286,20 +271,11 @@ class CombinationGate(Layer):
 		self.alpha = self.add_weight(name = 'alpha', shape = (1,), initializer = 'uniform', trainable = True, dtype = tf.float32)
 		super(CombinationGate, self).build(input_shape[0])
 
-	def call(self, x, x_ret, sim):
-		s = tf.keras.backend.cast(sim >= 0.5, dtype = tf.float32)
+	def call(self, x, x_ret):
 
 		return Add()([
-			Multiply()([
-				self.alpha,
-				pow(1, s),
-				x
-			]),
-			Multiply()([
-				(1 - self.alpha),
-				s,
-				x_ret
-			])
+			self.alpha * x,
+			(1 - self.alpha) * x_ret
 		])
 	
 	def compute_output_shape(self, input_shape):
@@ -466,7 +442,6 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	x = AveragePooling2D(pool_size=pool_size, strides=(1, 1))(x)
 	x = Flatten()(x)
 	x_ret = Flatten()(x_ret_)
-	sim = tf.cast(sim_, tf.float32)
 
 	# First Dense Layer
 	x = Dense(n_channels * 32, kernel_regularizer = regularizer, activation = "relu")(x)
@@ -475,7 +450,7 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 	x = Dense(512, kernel_regularizer = regularizer, activation = "relu")(x)
 
 	# Combination gate
-	x = CombinationGate()(x, x_ret, sim)
+	x = CombinationGate()(x, x_ret)
 
 	# Apply dropout if needed
 	if dropout:
@@ -509,11 +484,8 @@ def GenderNetwork(shape: tuple, n_channels: int, n_classes: int, dropout: float,
 if __name__ == "__main__":
 
 	# Define the constants
-	DATASET_PATH = "./Gender/"
 	BATCH_SIZE = 64
 	EPOCHS = 20
-	CLASS_NAME = ["female", "male"]
-	DATA_REGEX = r"([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)[\_]+([0-9]+)\.jpg"
 
 	if len(sys.argv) < 2:
 		print("Usage: [train|inference] {[dataset_path]}")
@@ -532,7 +504,7 @@ if __name__ == "__main__":
 				dataset_path = sys.argv[2]
 
 	if mode == "train":
-		trainer = ModelTrainer(dataset_path = dataset_path, batch_size = BATCH_SIZE, epochs = EPOCHS, class_name = CLASS_NAME, data_regex = DATA_REGEX)
+		trainer = ModelTrainer(dataset_path = dataset_path, batch_size = BATCH_SIZE, epochs = EPOCHS)
 		trainer.train_model()
 		sys.exit(0)
 	else:
